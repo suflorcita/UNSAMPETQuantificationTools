@@ -1,8 +1,37 @@
-import matplotlib as plt
-import numpy as np
+import matplotlib.pyplot as plt
+import numpy as np 
+import SimpleITK as sitk
+from scipy import ndimage as ndi
+
+def plot_images(T1, cambios_cerebro, n): 
+    img_T1 = sitk.GetArrayFromImage(T1)
+    img_cambios_cerebro = sitk.GetArrayFromImage(cambios_cerebro)
 
 
-def intensity_regions_bar_chart(regions, intensity1, intensity2, title=None):
+    fig_rows = 4
+    fig_cols = 4
+    n_subplots = fig_rows * fig_cols
+    n_slice = img_cambios_cerebro.shape[0]
+    step_size = n_slice // n_subplots
+    plot_range = n_subplots * step_size
+    start_stop = int((n_slice - plot_range) / 2)
+
+    fig, axs = plt.subplots(fig_rows, fig_cols)
+
+    for idx, img in enumerate(range(start_stop, plot_range, step_size)):
+        axs.flat[idx].imshow(img_T1[img, :, :], cmap='gray', alpha=1)
+        
+        if n == 0: 
+            axs.flat[idx].imshow(img_cambios_cerebro[img, :, :], cmap='bwr', vmin=-50, vmax=50, alpha=0.5)
+        elif n == 1: 
+            axs.flat[idx].imshow(ndi.rotate(img_cambios_cerebro[:, img, :], 180), cmap='bwr', vmin=-50, vmax=50, alpha=0.5)
+        elif n == 2: 
+            axs.flat[idx].imshow(ndi.rotate(img_cambios_cerebro[:, :, img], 180), cmap='bwr', vmin=-50, vmax=50, alpha=0.5)
+        axs.flat[idx].axis('off')
+
+    
+
+def intensity_regions_bar_chart(regions, intensity1, intensity2, colors=None, hemisphere=None, title=None):
     """
         Creates a bar chart using the brain regions in the x-axis and the signal intensity in the y-axis.
 
@@ -15,7 +44,8 @@ def intensity_regions_bar_chart(regions, intensity1, intensity2, title=None):
     """
 
     regions_graph = [str(i) + "_" + regions for i, regions in enumerate(regions)]
-
+    if hemisphere:
+        regions_graph= [region + "_left" if i % 2 == 0 else region + "_right"  for i, region in enumerate(regions_graph)]
     y_pos = np.arange(len(regions_graph))
     intensity_pet = [intensity1, intensity2]
 
@@ -32,134 +62,128 @@ def intensity_regions_bar_chart(regions, intensity1, intensity2, title=None):
     plt.legend(bbox_to_anchor=(1.001, 1), fontsize='small')
     plt.subplots_adjust(right=0.80)
 
-def bar_graph(output):
-    pass
 
 
+if __name__ == '__main__':
+    
+    # Bar chart mean for brain structure
+    # Regions
 
+    output_graphs = "/home/sol/PET_MRI/Subject/Procesado/PET/Graficos"
 
+    regions_mean = df_MNI152_intensity_mean.index
 
+    intensity_mean_Subject_normalization = df_subject_intensity_mean["normalization"]
+    intensity_mean_MNI152_normalization = df_MNI152_intensity_mean["normalization"]
 
+    intensity_mean_Subject_error = df_subject_intensity_mean["error"]
+    intensity_mean_MNI152_error = df_MNI152_intensity_mean["error"]
 
+    plt.figure(1)
+    intensity_regions_bar_chart(regions_mean, intensity_mean_Subject_normalization, intensity_mean_MNI152_normalization,
+                                title="Grafico por intensidades, promedio por región")
+    plt.savefig(output_graphs + "/graph1.png")
 
-# Bar chart mean for brain structure
-# Regions
+    plt.figure(2)
+    intensity_regions_bar_chart(regions_mean, intensity_mean_Subject_error, intensity_mean_MNI152_error,
+                                title="%error")
 
-output_graphs = "/home/sol/PET_MRI/Subject/Procesado/PET/Graficos"
+    # grafico 10 regiones con mas cambio
+    labels_10 = list(primeros_diez["n_label"])
+    regions_10_MNI_152 = pd.DataFrame()
 
-regions_mean = df_MNI152_intensity_mean.index
+    for label in labels_10:
+        row = df_MNI152_intensity.loc[df_MNI152_intensity['n_label'] == label]
+        regions_10_MNI_152 = pd.concat([regions_10_MNI_152, row], ignore_index=True)
 
-intensity_mean_Subject_normalization = df_subject_intensity_mean["normalization"]
-intensity_mean_MNI152_normalization = df_MNI152_intensity_mean["normalization"]
+    regions_10_Subject = pd.DataFrame()
 
-intensity_mean_Subject_error = df_subject_intensity_mean["error"]
-intensity_mean_MNI152_error = df_MNI152_intensity_mean["error"]
+    for label in labels_10:
+        row = df_subject_intensity.loc[df_MNI152_intensity['n_label'] == label]
+        regions_10_Subject = pd.concat([regions_10_Subject, row], ignore_index=True)
 
-plt.figure(1)
-intensity_regions_bar_chart(regions_mean, intensity_mean_Subject_normalization, intensity_mean_MNI152_normalization,
-                            title="Grafico por intensidades, promedio por región")
-plt.savefig(output_graphs + "/graph1.png")
+    # grafico
 
-plt.figure(2)
-intensity_regions_bar_chart(regions_mean, intensity_mean_Subject_error, intensity_mean_MNI152_error,
-                            title="%error")
+    regions = regions_10_MNI_152["structure"]
+    hemispheres = regions_10_MNI_152["hemisphere"]
 
-# grafico 10 regiones con mas cambio
-labels_10 = list(primeros_diez["n_label"])
-regions_10_MNI_152 = pd.DataFrame()
+    name_regions = []
 
-for label in labels_10:
-    row = df_MNI152_intensity.loc[df_MNI152_intensity['n_label'] == label]
-    regions_10_MNI_152 = pd.concat([regions_10_MNI_152, row], ignore_index=True)
+    for i, region in enumerate(regions):
+        name_region = region + "-" + hemispheres[i]
+        name_regions.append(name_region)
 
-regions_10_Subject = pd.DataFrame()
+    intensity_10_Subject = regions_10_MNI_152["normalization"]
+    intensity_10_MNI152 = regions_10_Subject["normalization"]
 
-for label in labels_10:
-    row = df_subject_intensity.loc[df_MNI152_intensity['n_label'] == label]
-    regions_10_Subject = pd.concat([regions_10_Subject, row], ignore_index=True)
+    plt.savefig(output_graphs + "/graph2.png")
 
-# grafico
+    plt.figure(3)
 
-regions = regions_10_MNI_152["structure"]
-hemispheres = regions_10_MNI_152["hemisphere"]
+    intensity_regions_bar_chart(name_regions, intensity_10_Subject, intensity_10_MNI152,
+                                title="Regions de mayor cambio")
 
-name_regions = []
+    plt.savefig(output_graphs + "/graph3.png")
 
-for i, region in enumerate(regions):
-    name_region = region + "-" + hemispheres[i]
-    name_regions.append(name_region)
+    # cambios cerebro
+    img_cambios_cerebro = sitk.GetArrayFromImage(cambios_cerebro)
 
-intensity_10_Subject = regions_10_MNI_152["normalization"]
-intensity_10_MNI152 = regions_10_Subject["normalization"]
+    # read T1 normalizada
+    path_T1 = "/home/sol/PET_MRI/Subject/Procesado/PET/Subject_to_MNI_152_ONLY_BRAIN/T1_MNI152_1mm_onlybrain_ANTsWarped.nii.gz"
+    sitk_T1 = sitk.ReadImage(path_T1)  # Read MNI 152
+    sitk_T1 = resample_sitk(sitk_T1, sitk_atlas_hammers)
+    img_T1 = sitk.GetArrayFromImage(sitk_T1)
 
-plt.savefig(output_graphs + "/graph2.png")
+    sitk.WriteImage(sitk_T1, output_subject_PET + "/T1_resampleado_only_brain.nii.gz")
 
-plt.figure(3)
+    fig_rows = 4
+    fig_cols = 4
+    n_subplots = fig_rows * fig_cols
+    n_slice = img_cambios_cerebro.shape[0]
+    step_size = n_slice // n_subplots
+    plot_range = n_subplots * step_size
+    start_stop = int((n_slice - plot_range) / 2)
 
-intensity_regions_bar_chart(name_regions, intensity_10_Subject, intensity_10_MNI152,
-                            title="Regions de mayor cambio")
+    fig, axs = plt.subplots(fig_rows, fig_cols)
 
-plt.savefig(output_graphs + "/graph3.png")
+    for idx, img in enumerate(range(start_stop, plot_range, step_size)):
+        axs.flat[idx].imshow(img_T1[img, :, :], cmap='gray', alpha=1)
+        axs.flat[idx].imshow(img_cambios_cerebro[img, :, :], cmap='bwr', vmin=-50, vmax=50, alpha=0.5)
+        axs.flat[idx].axis('off')
 
-# cambios cerebro
-img_cambios_cerebro = sitk.GetArrayFromImage(cambios_cerebro)
+    plt.savefig(output_graphs + "/graph4.png")
 
-# read T1 normalizada
-path_T1 = "/home/sol/PET_MRI/Subject/Procesado/PET/Subject_to_MNI_152_ONLY_BRAIN/T1_MNI152_1mm_onlybrain_ANTsWarped.nii.gz"
-sitk_T1 = sitk.ReadImage(path_T1)  # Read MNI 152
-sitk_T1 = resample_sitk(sitk_T1, sitk_atlas_hammers)
-img_T1 = sitk.GetArrayFromImage(sitk_T1)
+    plt.figure(4)
 
-sitk.WriteImage(sitk_T1, output_subject_PET + "/T1_resampleado_only_brain.nii.gz")
+    n_slice = img_cambios_cerebro.shape[1]
+    step_size = n_slice // n_subplots
+    plot_range = n_subplots * step_size
+    start_stop = int((n_slice - plot_range) / 2)
+    fig, axs = plt.subplots(fig_rows, fig_cols)
 
-fig_rows = 4
-fig_cols = 4
-n_subplots = fig_rows * fig_cols
-n_slice = img_cambios_cerebro.shape[0]
-step_size = n_slice // n_subplots
-plot_range = n_subplots * step_size
-start_stop = int((n_slice - plot_range) / 2)
+    for idx, img in enumerate(range(start_stop, plot_range, step_size)):
+        axs.flat[idx].imshow(ndi.rotate(img_T1[:, img, :], 180), cmap='gray', alpha=1)
+        axs.flat[idx].imshow(ndi.rotate(img_cambios_cerebro[:, img, :], 180), cmap='bwr', vmin=-50, vmax=50, alpha=0.5)
+        axs.flat[idx].axis('off')
 
-fig, axs = plt.subplots(fig_rows, fig_cols)
+    plt.savefig(output_graphs + "/graph5.png")
 
-for idx, img in enumerate(range(start_stop, plot_range, step_size)):
-    axs.flat[idx].imshow(img_T1[img, :, :], cmap='gray', alpha=1)
-    axs.flat[idx].imshow(img_cambios_cerebro[img, :, :], cmap='bwr', vmin=-50, vmax=50, alpha=0.5)
-    axs.flat[idx].axis('off')
+    plt.figure(5)
 
-plt.savefig(output_graphs + "/graph4.png")
+    n_slice = img_cambios_cerebro.shape[2]
+    step_size = n_slice // n_subplots
+    plot_range = n_subplots * step_size
+    start_stop = int((n_slice - plot_range) / 2)
+    fig, axs = plt.subplots(fig_rows, fig_cols)
 
-plt.figure(4)
+    for idx, img in enumerate(range(start_stop, plot_range, step_size)):
+        axs.flat[idx].imshow(ndi.rotate(img_T1[:, :, img], 180), cmap='gray', alpha=1)
+        axs.flat[idx].imshow(ndi.rotate(img_cambios_cerebro[:, :, img], 180), cmap='bwr', vmin=-100, vmax=100, alpha=0.5)
+        axs.flat[idx].axis('off')
 
-n_slice = img_cambios_cerebro.shape[1]
-step_size = n_slice // n_subplots
-plot_range = n_subplots * step_size
-start_stop = int((n_slice - plot_range) / 2)
-fig, axs = plt.subplots(fig_rows, fig_cols)
+    plt.savefig(output_graphs + "/graph6.png")
+    plt.figure(6)
 
-for idx, img in enumerate(range(start_stop, plot_range, step_size)):
-    axs.flat[idx].imshow(ndi.rotate(img_T1[:, img, :], 180), cmap='gray', alpha=1)
-    axs.flat[idx].imshow(ndi.rotate(img_cambios_cerebro[:, img, :], 180), cmap='bwr', vmin=-50, vmax=50, alpha=0.5)
-    axs.flat[idx].axis('off')
-
-plt.savefig(output_graphs + "/graph5.png")
-
-plt.figure(5)
-
-n_slice = img_cambios_cerebro.shape[2]
-step_size = n_slice // n_subplots
-plot_range = n_subplots * step_size
-start_stop = int((n_slice - plot_range) / 2)
-fig, axs = plt.subplots(fig_rows, fig_cols)
-
-for idx, img in enumerate(range(start_stop, plot_range, step_size)):
-    axs.flat[idx].imshow(ndi.rotate(img_T1[:, :, img], 180), cmap='gray', alpha=1)
-    axs.flat[idx].imshow(ndi.rotate(img_cambios_cerebro[:, :, img], 180), cmap='bwr', vmin=-100, vmax=100, alpha=0.5)
-    axs.flat[idx].axis('off')
-
-plt.savefig(output_graphs + "/graph6.png")
-plt.figure(6)
-
-plt.tight_layout()
-# plt.show()
+    plt.tight_layout()
+    # plt.show()
 
