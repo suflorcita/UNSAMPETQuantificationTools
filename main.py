@@ -8,15 +8,17 @@ import os
 
 if __name__ == '__main__':
 
-    # images
+    # Images
     if len(sys.argv) > 1:
         path_PET_image = sys.argv[1]
         path_MRI_image = sys.argv[2]
         subject = sys.argv[3]
+        output_path = sys.argv[4]
     else:
         path_PET_image = "/home/sol/PET_MRI/Procesado/022_S_4291/Nifti/FDG-PET"
         path_MRI_image = "/home/sol/PET_MRI/Procesado/022_S_4291/Nifti/RMN/MPRAGE.nii.gz"
         subject = "022_S_4291"
+        output_path = "/home/sol/PET_MRI/Procesado/"
 
     # Path ATLAS
     path_MNI_152_T1 = "ATLAS/MNI152_T1_1mm.nii.gz"
@@ -30,7 +32,7 @@ if __name__ == '__main__':
     labels_Hammers_csv_path = "Labels/labels_Hammers.csv"
 
     # output
-    output_path = "/home/sol/PET_MRI/Procesado/" + subject
+    output_path = output_path + subject
 
     if not os.path.exists(output_path):
         os.mkdir(output_path)
