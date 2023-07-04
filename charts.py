@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np 
 import SimpleITK as sitk
+import sys
 from scipy import ndimage as ndi
 
 
@@ -113,12 +114,19 @@ def intensity_regions_bar_chart(regions, intensity1, intensity2, colors=None, he
 
 
 if __name__ == '__main__':
-    
+
+    # images
+    if len(sys.argv) > 1:
+        output_charts = sys.argv[1]
+        CSV_folder = sys.argv[2]
+        subject_name = sys.argv[3]
+    else:
+        output_charts = "../Procesado/SubjectCEUNIM/charts"
+        CSV_folder = "../Procesado/SubjectCEUNIM/CSV"
+        subject_name = "SubjectCEUNIM"
     # Bar chart mean for brain structure
     # Regions
 
-    output_graphs = "Procesado/charts"
-    CSV_folder = "Procesado/CSV"
 
     # Read CSV MNI152 and subject into a dataframe 
     MNI152 = pd.read_csv(CSV_folder + "/" + "MNI152_intensity.csv")
@@ -141,12 +149,14 @@ if __name__ == '__main__':
     plt.figure(1)
     intensity_regions_bar_chart(regions_mean, intensity_mean_Subject_normalization, intensity_mean_MNI152_normalization,
                                 title="Grafico por intensidades, promedio por región")
-    plt.savefig(output_graphs + "/graph1.png")
+    name_chart1 = f'{output_charts}/{subject_name}_chart1.png'
+    plt.savefig(name_chart1)
 
     plt.figure(2)
     intensity_regions_bar_chart(regions_mean, intensity_mean_Subject_error, intensity_mean_MNI152_error,
                                 title="%error")
-    plt.savefig(output_graphs + "/graph2.png")
+    name_chart2 = f'{output_charts}/{subject_name}_chart2.png'
+    plt.savefig(name_chart2)
 
     # Charts: Top ren regions more hypometabolic  
     
@@ -161,23 +171,40 @@ if __name__ == '__main__':
 
     # List of labels of top ten regions
     labels_top_ten = list(top_ten["n_label"])
-    
-    # Create a dataframe with top ten regions and the intensity value for MNI152 and subject 
-    labels_10 = list(top_ten["n_label"])
-    regions_10_MNI_152 = pd.DataFrame()
 
-    for label in labels_10:
+    # Create a dataframe with top ten regions and the intensity value for MNI152
+    top_ten_MNI152 = pd.DataFrame()
+
+    for label in labels_top_ten:
         row = MNI152.loc[MNI152['n_label'] == label]
-        regions_10_MNI_152 = pd.concat([regions_10_MNI_152, row], ignore_index=True)
+        top_ten_MNI152 = pd.concat([top_ten_MNI152, row], ignore_index=True)
 
-    regions_10_Subject = pd.DataFrame()
+    # Create a dataframe with top ten regions and the intensity value for Subject
+    top_ten_Subject = pd.DataFrame()
 
-    for label in labels_10:
+    for label in labels_top_ten:
         row = subject.loc[subject['n_label'] == label]
-        regions_10_Subject = pd.concat([regions_10_Subject, row], ignore_index=True)
+        top_ten_Subject = pd.concat([top_ten_Subject, row], ignore_index=True)
 
-    # # grafico
+    # Intensity values
+    intensity_top_ten_subject_normalization = top_ten_Subject["normalization"]
+    intensity_top_ten_MNI152_normalization = top_ten_MNI152["normalization"]
 
+    # Regions
+    regions_top_ten = top_ten_Subject["structure"]
+
+
+    plt.figure(3)
+    intensity_regions_bar_chart(regions_top_ten, intensity_top_ten_subject_normalization,
+                                intensity_top_ten_MNI152_normalization,
+                                title="Top 10 regions")
+    name_chart3 = f'{output_charts}/{subject_name}_chart3.png'
+    plt.savefig(name_chart3)
+
+
+
+    # # Charts
+    #
     # regions = regions_10_MNI_152["structure"]
     # hemispheres = regions_10_MNI_152["hemisphere"]
 
