@@ -125,12 +125,46 @@ if __name__ == '__main__':
         CSV_folder = "../Procesado/SubjectCEUNIM/CSV"
         subject_name = "SubjectCEUNIM"
     # Bar chart mean for brain structure
-    # Regions
 
 
     # Read CSV MNI152 and subject into a dataframe 
     MNI152 = pd.read_csv(CSV_folder + "/" + "MNI152_intensity.csv")
     subject = pd.read_csv(CSV_folder + "/" + "subject_intensity.csv")
+
+    init = 0
+    step = len(MNI152) // 3 + 1
+    finish = len(MNI152)
+    j = 1
+
+    # Regions
+    for i in range(init, finish, step):
+        regions = MNI152[i:i + step]["structure"]
+        hemispheres = MNI152[i: i + step]["hemisphere"]
+        name_regions = pd.Series(regions + "_" + hemispheres)
+
+        # intensity values for MNI152 and subject
+        intensity_MNI152 = MNI152[i: i + step]["normalization"]
+        intensity_subject = subject[i: i + step]["normalization"]
+
+        chart_df = pd.DataFrame()
+        chart_df["name_regions"] = name_regions
+        chart_df["intensity_MNI152"] = intensity_MNI152
+        chart_df["intensity_subject"] = intensity_subject
+        chart_df = chart_df.dropna()
+
+        name_chart = f"Intensidad por región normalizado al cerebelo {j}"
+
+        plt.figure(j)
+        intensity_regions_bar_chart(chart_df["name_regions"], chart_df["intensity_subject"], chart_df["intensity_MNI152"],
+                                    title=name_chart)
+        name_chart = f'{output_charts}/{subject_name}_all_regions_{j}.png'
+
+        # Set figure size
+        fig = plt.gcf()  # Get the current figure
+        fig.set_size_inches(16, 8)  # Set the size in inches (width, height)
+        plt.savefig(name_chart, dpi=600)
+
+        j += 1
 
     # Mean for region 
     df_MNI152_mean = mean_dataframe(MNI152)
@@ -146,17 +180,27 @@ if __name__ == '__main__':
     intensity_mean_Subject_error = df_subject_mean["error"]
     intensity_mean_MNI152_error = df_MNI152_mean["error"]
 
-    plt.figure(1)
+    j += 1
+    plt.figure(j)
     intensity_regions_bar_chart(regions_mean, intensity_mean_Subject_normalization, intensity_mean_MNI152_normalization,
                                 title="Grafico por intensidades, promedio por región")
-    name_chart1 = f'{output_charts}/{subject_name}_chart1.png'
-    plt.savefig(name_chart1)
+    name_chart = f'{output_charts}/{subject_name}_mean_intensity.png'
 
-    plt.figure(2)
+    # Set figure size
+    fig = plt.gcf()  # Get the current figure
+    fig.set_size_inches(16, 8)  # Set the size in inches (width, height)
+    plt.savefig(name_chart, dpi=600)
+
+    j += 1
+    plt.figure(j)
     intensity_regions_bar_chart(regions_mean, intensity_mean_Subject_error, intensity_mean_MNI152_error,
                                 title="%error")
-    name_chart2 = f'{output_charts}/{subject_name}_chart2.png'
-    plt.savefig(name_chart2)
+    name_chart = f'{output_charts}/{subject_name}_mean_error.png'
+
+    # Set figure size
+    fig = plt.gcf()  # Get the current figure
+    fig.set_size_inches(16, 8)  # Set the size in inches (width, height)
+    plt.savefig(name_chart, dpi=600)
 
     # Charts: Top ren regions more hypometabolic  
     
@@ -193,13 +237,19 @@ if __name__ == '__main__':
     # Regions
     regions_top_ten = top_ten_Subject["structure"]
 
-
-    plt.figure(3)
+    j += 1
+    plt.figure(j)
     intensity_regions_bar_chart(regions_top_ten, intensity_top_ten_subject_normalization,
                                 intensity_top_ten_MNI152_normalization,
                                 title="Top 10 regions")
-    name_chart3 = f'{output_charts}/{subject_name}_chart3.png'
-    plt.savefig(name_chart3)
+    name_chart = f'{output_charts}/{subject_name}_top_ten_regions.png'
+
+    # Set figure size
+    fig = plt.gcf()  # Get the current figure
+    fig.set_size_inches(16, 8)  # Set the size in inches (width, height)
+    plt.savefig(name_chart, dpi=600)
+
+    print(f"charts {subject_name}:ok")
 
 
 
