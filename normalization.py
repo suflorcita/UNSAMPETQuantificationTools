@@ -29,17 +29,20 @@ def show_image(image1, image2, slice):
     plt.tight_layout()
 
     # Show the figure
-    plt.show()    
+    plt.show()
 
 
-def intensity_normalization(image, mode="avg total value"): 
+def intensity_normalization(image, mode=("avg total value", 0)):
     image_array = sitk.GetArrayFromImage(image)
 
-    if mode =="avg total value":
+    if mode[0] == "avg total value":
         avg_total_value = np.sum(image_array) / image_array.size
-    #elif mode == "cerebellum":
-    
-    normalized_image = image_array / avg_total_value
+        scalar = avg_total_value
+
+    elif mode[0] == "cerebellum":
+        scalar = mode[1]
+
+    normalized_image = image_array / scalar
 
     # show image 
     # for i in range(0, image_array.shape[0], 50): 
@@ -48,13 +51,5 @@ def intensity_normalization(image, mode="avg total value"):
     normalized_image = sitk.GetImageFromArray(normalized_image)
     normalized_image.CopyInformation(image)
     return normalized_image
-
-
-
-
-if __name__ == '__main__':
-    path_brain_image  = "/home/solcat/PET/002_S_4270/ANTs/PET_Norm_MNI_152_ANT.nii.gz"
-    brain_image = sitk.ReadImage(path_brain_image)
-    norm_image = intensity_normalization(brain_image)
 
 
