@@ -32,7 +32,7 @@ if __name__ == '__main__':
     labels_Hammers_csv_path = "Labels/labels_Hammers.csv"
 
     # output
-    output_path = output_path + subject
+    output_path = output_path + "/" + subject
 
     if not os.path.exists(output_path):
         os.mkdir(output_path)
