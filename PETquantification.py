@@ -153,51 +153,19 @@ def PET_FDG_quantification(path_brain_image, path_brain_segmentation,
             else:
                 hemisphere = ""
                 structure_name = "-".join(structure_name)
-        elif atlas == "Freesurfer":
-            structure_name = structure_name.split("-")
-
-            if structure_name[0] == "Left" or structure_name[1] == "lh":
-                hemisphere = "L"
-                structure_name = "-".join(structure_name[:-1])
-            elif structure_name[0] == "Right" or structure_name[1] == "rh":
-                hemisphere = ""
-                structure_name = "-".join(structure_name)
-
-
-        # right cerebellum
-        if path_second_segmentation and atlas == "Hammers" and label == 17:
-            mask_right_cerebellum = array_segmentation2 == 47
-
-            # signal intensity
-            mean_right_cerebellum = np.mean(array_brain[mask_right_cerebellum])
-
-            # create new image
-            new_image[mask_right_cerebellum] = mean_right_cerebellum
-
-            # to dataframe
-            row = pd.Series({'n_label': 17, 'mean_PET': mean_right_cerebellum, 'structure': structure_name,
-                             'hemisphere': hemisphere})
-            new_df = pd.concat([new_df, row.to_frame().T], ignore_index=True)
-            continue
-
-        # left cerebellum
-        if path_second_segmentation and atlas == "Hammers" and label == 18:
-            # mask
-            mask_left_cerebellum = array_segmentation2 == 8
-
-            # signal intensity
-            mean_left_cerebellum = np.mean(array_brain[mask_left_cerebellum])
-
-            # create new image
-            new_image[mask_left_cerebellum] = mean_left_cerebellum
-
-            # to dataframe
-            row = pd.Series({'n_label': 18, 'mean_PET': mean_left_cerebellum, 'structure': structure_name,
-                             'hemisphere': hemisphere})
-            new_df = pd.concat([new_df, row.to_frame().T], ignore_index=True)
-            continue
 
         mask_label = array_segmentation == label  # create a mask
+        
+
+        # right cerebellum: 17 is Hammers right cerebellum, 47 is aseg right cerebellum
+        if path_second_segmentation and atlas == "Hammers" and label == 17:
+            mask_label1 = mask_label
+            mask_label = array_segmentation2 == 47
+
+
+        # left cerebellum: 18 is Hammers left cerebellum , 8 is aseg left cerebellum
+        if path_second_segmentation and atlas == "Hammers" and label == 18:         
+            mask_label = array_segmentation2 == 8      
 
         # signal intensity
         mean = np.mean(array_brain[mask_label])
@@ -210,15 +178,14 @@ def PET_FDG_quantification(path_brain_image, path_brain_segmentation,
             {'n_label': int(label), 'mean_PET': mean, 'structure': structure_name, 'hemisphere': hemisphere})
         new_df = pd.concat([new_df, row.to_frame().T], ignore_index=True)
 
+
     # Normalization
     if normalization:
-        new_df = intensity_cerebellum_normalization(new_df)
+        new_df = intensity_cerebellum_normalization(new_df) 
 
     new_image = sitk.GetImageFromArray(new_image)
     new_image.CopyInformation(brain_segmentation)
     return new_df, new_image
-
-
 
 def image_change(df_subject, df_atlas, path_segmented_brain, path_second_segmentation=None):
     """ 
