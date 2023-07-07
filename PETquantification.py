@@ -219,50 +219,6 @@ def PET_FDG_quantification(path_brain_image, path_brain_segmentation,
     return new_df, new_image
 
 
-def mean_dataframe(df_intensity_region):
-    '''Creates a dataframe with the intensity of the signal for region in the atlas.
-            Args:
-               df_intensity_region: 
-               A dataframe with the intensity of the signal for region in each hemisphere.
-
-            Returns:
-                df_mean_regions: 
-                A dataframe with the mean intensity of the signal for region in both hemispheres.
-            '''
-
-    # mean of the two regions
-    df_mean_regions = pd.DataFrame(df_intensity_region.groupby(["structure"])["normalization"].mean())
-
-    # error
-    errors = []
-
-    # Iterate over the dataframe
-    for index, row in df_mean_regions.iterrows():
-
-        # encuentro las regiones que coinciden con el índice
-        structures = df_intensity_region.loc[df_intensity_region["structure"] == index]
-
-        if len(structures) != 2:
-            error = np.nan
-            errors.append(error)
-            continue
-
-        structure_left = structures.loc[structures["hemisphere"] == "L"]
-        structure_right = structures.loc[structures["hemisphere"] == "R"]
-
-        value_left = float(structure_left["normalization"])
-        value_right = float(structure_right["normalization"])
-        value_mean = row["normalization"]
-
-        error = abs(((value_left - value_right) / value_mean) * 100)
-        errors.append(error)
-
-    df_mean_regions["error"] = errors
-
-    df_mean_regions = df_mean_regions.dropna()
-
-    return df_mean_regions
-
 
 def image_change(df_subject, df_atlas, path_segmented_brain, path_second_segmentation=None):
     """ 
@@ -354,24 +310,7 @@ def image_change(df_subject, df_atlas, path_segmented_brain, path_second_segment
 
     return new_image, new_df
 
-# # mean of the two regions
-# df_MNI152_intensity_mean = mean_dataframe(df_MNI152_intensity)
 
-
-# # mean of the two regions
-# df_subject_intensity_mean = mean_dataframe(df_subject_intensity)
-#
-#
-# cambios_cerebro, df_change = image_change(df_subject_intensity, df_MNI152_intensity, sitk_atlas_hammers)
-#
-# df_change.to_csv('/home/sol/PET_MRI/Subject/Procesado/PET/CSV/df_change.csv')
-#
-# # Ordenar el DataFrame por la columna de cambio
-# df_change_sorted = df_change.sort_values('cambio')
-#
-# # Obtener los diez primeros valores del DataFrame ordenado
-# primeros_diez = df_change_sorted.head(10)
-#
 #
 # # # write New Image
 # # sitk.WriteImage(image, output_subject_PET + "/imagen_sintetica2.nii.gz")
