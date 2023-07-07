@@ -3,6 +3,7 @@ import SimpleITK as sitk
 import subprocess
 import pandas as pd
 import PETquantification as quant
+import normalization as norm
 import sys
 import os
 
@@ -224,6 +225,20 @@ if __name__ == '__main__':
     image_diff, df_diff = quant.image_change(df_subject_intensity, df_MNI152_intensity, path_Hammers)
     df_diff.to_csv(path_CSV_files + "Intensity_image_changes.csv")
     sitk.WriteImage(image_diff, path_images + "/synthetic_image_changes.nii.gz")
+
+    # Intensity Normalization
+
+    # Cerebellum values
+    cerebellum_R = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == 'cerebellum')
+                                                   & (df_subject_intensity['hemisphere'] == 'R')]['mean_PET']).iloc[0])
+    cerebellum_L = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == 'cerebellum')
+                                                   & (df_subject_intensity['hemisphere'] == 'L')]['mean_PET']).iloc[0])
+    cerebellum = (cerebellum_R + cerebellum_L) / 2
+
+    brain_image = sitk.ReadImage(path_PET_final)
+
+    norm_image = norm.intensity_normalization(brain_image, mode=("cerebellum", cerebellum))
+    sitk.WriteImage(norm_image, output_path + "/intensity_normalization_image.nii.gz")
 
     # Bar charts
     path_chart = output_path + "/charts"
