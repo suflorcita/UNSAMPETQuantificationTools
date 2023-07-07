@@ -2,12 +2,11 @@ import SimpleITK as sitk
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import scipy.ndimage as ndi
 
 
 def intensity_cerebellum_normalization(df_intensity):
     """ 
-    Add a column to the dataframe 
+    Add a column to the dataframe
     with the normalized intensity value per area, using the cerebellum as the reference.
 
     
@@ -22,11 +21,13 @@ def intensity_cerebellum_normalization(df_intensity):
     """
 
     # cerebellum values
-    cerebellum_R = int((df_intensity.loc[(df_intensity['structure'] == 'cerebellum')
+    cerebellum_R = float((df_intensity.loc[(df_intensity['structure'] == 'cerebellum')
                                         & (df_intensity['hemisphere'] == 'R')]['mean_PET']).iloc[0])
-    cerebellum_L = int((df_intensity.loc[(df_intensity['structure'] == 'cerebellum')
+    cerebellum_L = float((df_intensity.loc[(df_intensity['structure'] == 'cerebellum')
                                         & (df_intensity['hemisphere'] == 'L')]['mean_PET']).iloc[0])
     cerebellum = (cerebellum_R + cerebellum_L) / 2
+
+
 
     # normalize with cerebellum
     normalization_values = []
@@ -276,11 +277,3 @@ def image_change(df_subject, df_atlas, path_segmented_brain, path_second_segment
     new_image.CopyInformation(segmented_brain)
 
     return new_image, new_df
-
-
-#
-# # # write New Image
-# # sitk.WriteImage(image, output_subject_PET + "/imagen_sintetica2.nii.gz")
-# # sitk.WriteImage(image, output_subject_PET + "/imagen_sintetica3.nii.gz")
-# sitk.WriteImage(cambios_cerebro, output_subject_PET + "/imagen_cambios_cerebro2.nii.gz")
-#
