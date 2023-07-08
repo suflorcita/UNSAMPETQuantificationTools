@@ -222,7 +222,7 @@ if __name__ == '__main__':
 
     # Compare subject with Atlas MNI152 dataset
 
-    image_diff, df_diff = quant.image_change(df_subject_intensity, df_MNI152_intensity, path_Hammers)
+    image_diff, df_diff = quant.image_change(df_subject_intensity, df_MNI152_intensity, path_PET_final)
     df_diff.to_csv(path_CSV_files + "Intensity_image_changes.csv")
     sitk.WriteImage(image_diff, path_images + "/synthetic_image_changes.nii.gz")
 
