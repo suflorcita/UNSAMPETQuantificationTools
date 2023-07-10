@@ -10,12 +10,12 @@ def write_line_quantification(subject, RMN_path, FDG_path, output_path, path_fil
         )
     pass
 
-def write_line_chart(subject, output_chart, CSV_folder, path_file):
+def write_line_chart(subject, output_chart, subject_folder, path_file):
     with open(path_file, 'a') as f:
         f.write(
             f'python3 charts.py '
             f'{output_chart} '
-            f'{CSV_folder} '
+            f'{subject_folder} '
             f'{subject} \n'
         )
     pass
@@ -60,13 +60,10 @@ def generate_script_charts(output_directory, script_path):
             continue
         dir_subject = output_directory + "/" + subject
 
-        # CSV path
-        CSV_subject = dir_subject + "/CSV"
-
         # Chart path
         chart_path = dir_subject + "/charts"
 
-        write_line_chart(subject, chart_path, CSV_subject, script_path)
+        write_line_chart(subject, chart_path, dir_subject, script_path)
 
 
 
