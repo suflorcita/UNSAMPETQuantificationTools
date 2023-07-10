@@ -6,6 +6,42 @@ import sys
 from scipy import ndimage as ndi
 
 
+def resample_sitk(input_image, reference_image):
+    """
+    Resamples a SimpleITK image to match the spacing, 
+    size, and orientation of a reference image.
+    
+    Parameters
+    ----------
+    input_image  : SimpleITK.Image
+        The input image to be resampled.
+    reference_image : SimpleITK.Image
+        The reference image whose spacing, size, 
+        and orientation will be used for resampling.
+
+    Returns
+    ---------    
+    resampled_image: simpleITK image object 
+    
+    """
+    # Create an identity transform
+    identity_transform = sitk.Transform()
+
+    # Define the interpolator to use
+    interpolator = sitk.sitkLinear
+
+    # Define the default pixel value for points outside the input image
+    defaultPixelValue = 0
+
+    # Define the output pixel type
+    outputPixelType = sitk.sitkFloat32
+
+    # Resample the input image
+    resampled_image = sitk.Resample(input_image, reference_image, identity_transform, interpolator, defaultPixelValue,
+                                    outputPixelType)
+    return resampled_image
+
+
 
 def mean_dataframe(df_intensity_region):
     '''Creates a dataframe with the intensity of the signal for region in the atlas.
@@ -52,11 +88,7 @@ def mean_dataframe(df_intensity_region):
     return df_mean_regions
 
 
-def plot_images(T1, cambios_cerebro, n): 
-    img_T1 = sitk.GetArrayFromImage(T1)
-    img_cambios_cerebro = sitk.GetArrayFromImage(cambios_cerebro)
-
-
+def plot_images(img_T1, img_cambios_cerebro, n): 
     fig_rows = 4
     fig_cols = 4
     n_subplots = fig_rows * fig_cols
@@ -64,18 +96,20 @@ def plot_images(T1, cambios_cerebro, n):
     step_size = n_slice // n_subplots
     plot_range = n_subplots * step_size
     start_stop = int((n_slice - plot_range) / 2)
+    cmap = "seismic"
 
     fig, axs = plt.subplots(fig_rows, fig_cols)
 
     for idx, img in enumerate(range(start_stop, plot_range, step_size)):
-        axs.flat[idx].imshow(img_T1[img, :, :], cmap='gray', alpha=1)
-        
         if n == 0: 
-            axs.flat[idx].imshow(img_cambios_cerebro[img, :, :], cmap='bwr', vmin=-50, vmax=50, alpha=0.5)
+            axs.flat[idx].imshow(img_T1[img, :, :], cmap='gray', alpha=1)
+            axs.flat[idx].imshow(img_cambios_cerebro[img, :, :], cmap=cmap, vmin=-50, vmax=50, alpha=0.5)
         elif n == 1: 
-            axs.flat[idx].imshow(ndi.rotate(img_cambios_cerebro[:, img, :], 180), cmap='bwr', vmin=-50, vmax=50, alpha=0.5)
+            axs.flat[idx].imshow(ndi.rotate(img_T1[:, img, :],180), cmap='gray', alpha=1)
+            axs.flat[idx].imshow(ndi.rotate(img_cambios_cerebro[:, img, :], 180), cmap=cmap, vmin=-50, vmax=50, alpha=0.5)
         elif n == 2: 
-            axs.flat[idx].imshow(ndi.rotate(img_cambios_cerebro[:, :, img], 180), cmap='bwr', vmin=-50, vmax=50, alpha=0.5)
+            axs.flat[idx].imshow(ndi.rotate(img_T1[:, :, img],180), cmap='gray', alpha=1)
+            axs.flat[idx].imshow(ndi.rotate(img_cambios_cerebro[:, :, img], 180), cmap=cmap, vmin=-50, vmax=50, alpha=0.5)
         axs.flat[idx].axis('off')
 
     
@@ -118,12 +152,15 @@ if __name__ == '__main__':
     # images
     if len(sys.argv) > 1:
         output_charts = sys.argv[1]
-        CSV_folder = sys.argv[2]
+        subject_folder = sys.argv[2]
         subject_name = sys.argv[3]
     else:
         output_charts = "../Procesado/SubjectCEUNIM/charts"
         CSV_folder = "../Procesado/SubjectCEUNIM/CSV"
         subject_name = "SubjectCEUNIM"
+
+
+    CSV_folder = subject_folder + "/CSV"
     # Bar chart mean for brain structure
 
 
@@ -249,7 +286,40 @@ if __name__ == '__main__':
     fig.set_size_inches(16, 8)  # Set the size in inches (width, height)
     plt.savefig(name_chart, dpi=600)
 
+    # Read ATLAS Hammers 
+    atlas_Hammers = "ATLAS/Hammers_mith-n30r95-MaxProbMap-gm-MNI152-SPM12.nii.gz"
+    sitk_atlas_hammers = sitk.ReadImage(atlas_Hammers)
+
+    # Cambios cerebro
+    cambios_cerebro = subject_folder + "/Synthetic_Image/synthetic_image_changes.nii.gz"
+    img_cambios_cerebro = sitk.ReadImage(cambios_cerebro)
+    img_cambios_cerebro = sitk.GetArrayFromImage(img_cambios_cerebro)
+
+    # read T1 normalizada
+    path_T1 = subject_folder + "ANTs/T1_Norm_MNI_152_ANTWarped.nii.gz"
+    sitk_T1 = sitk.ReadImage(path_T1)
+   
+    # resample to Hammers
+    sitk_T1 = resample_sitk(sitk_T1, sitk_atlas_hammers)
+    img_T1 = sitk.GetArrayFromImage(sitk_T1)
+
+    sitk.WriteImage(sitk_T1, subject_folder + "T1_resampleado_only_brain.nii.gz")
+
+    # Plot brain images 
+    plot_images(img_T1, img_cambios_cerebro, 0)
+    name_chart = f'{output_charts}/{subject_name}_brain1.png'
+    plt.savefig("brain1.png")
+
+    plot_images(img_T1, img_cambios_cerebro, 1)
+    name_chart = f'{output_charts}/{subject_name}_brain2.png'
+    plt.savefig("brain1.png")
+
+    plot_images(img_T1, img_cambios_cerebro, 2)
+    name_chart = f'{output_charts}/{subject_name}_brain3.png'
+    plt.savefig("brain3.png")
+
     print(f"charts {subject_name}:ok")
+
 
 
 
@@ -275,66 +345,3 @@ if __name__ == '__main__':
     #                             title="Regions de mayor cambio")
 
     # plt.savefig(output_graphs + "/graph3.png")
-
-    # # cambios cerebro
-    # img_cambios_cerebro = sitk.GetArrayFromImage(cambios_cerebro)
-
-    # # read T1 normalizada
-    # path_T1 = "/home/sol/PET_MRI/Subject/Procesado/PET/Subject_to_MNI_152_ONLY_BRAIN/T1_MNI152_1mm_onlybrain_ANTsWarped.nii.gz"
-    # sitk_T1 = sitk.ReadImage(path_T1)  # Read MNI 152
-    # sitk_T1 = resample_sitk(sitk_T1, sitk_atlas_hammers)
-    # img_T1 = sitk.GetArrayFromImage(sitk_T1)
-
-    # sitk.WriteImage(sitk_T1, output_subject_PET + "/T1_resampleado_only_brain.nii.gz")
-
-    # fig_rows = 4
-    # fig_cols = 4
-    # n_subplots = fig_rows * fig_cols
-    # n_slice = img_cambios_cerebro.shape[0]
-    # step_size = n_slice // n_subplots
-    # plot_range = n_subplots * step_size
-    # start_stop = int((n_slice - plot_range) / 2)
-
-    # fig, axs = plt.subplots(fig_rows, fig_cols)
-
-    # for idx, img in enumerate(range(start_stop, plot_range, step_size)):
-    #     axs.flat[idx].imshow(img_T1[img, :, :], cmap='gray', alpha=1)
-    #     axs.flat[idx].imshow(img_cambios_cerebro[img, :, :], cmap='bwr', vmin=-50, vmax=50, alpha=0.5)
-    #     axs.flat[idx].axis('off')
-
-    # plt.savefig(output_graphs + "/graph4.png")
-
-    # plt.figure(4)
-
-    # n_slice = img_cambios_cerebro.shape[1]
-    # step_size = n_slice // n_subplots
-    # plot_range = n_subplots * step_size
-    # start_stop = int((n_slice - plot_range) / 2)
-    # fig, axs = plt.subplots(fig_rows, fig_cols)
-
-    # for idx, img in enumerate(range(start_stop, plot_range, step_size)):
-    #     axs.flat[idx].imshow(ndi.rotate(img_T1[:, img, :], 180), cmap='gray', alpha=1)
-    #     axs.flat[idx].imshow(ndi.rotate(img_cambios_cerebro[:, img, :], 180), cmap='bwr', vmin=-50, vmax=50, alpha=0.5)
-    #     axs.flat[idx].axis('off')
-
-    # plt.savefig(output_graphs + "/graph5.png")
-
-    # plt.figure(5)
-
-    # n_slice = img_cambios_cerebro.shape[2]
-    # step_size = n_slice // n_subplots
-    # plot_range = n_subplots * step_size
-    # start_stop = int((n_slice - plot_range) / 2)
-    # fig, axs = plt.subplots(fig_rows, fig_cols)
-
-    # for idx, img in enumerate(range(start_stop, plot_range, step_size)):
-    #     axs.flat[idx].imshow(ndi.rotate(img_T1[:, :, img], 180), cmap='gray', alpha=1)
-    #     axs.flat[idx].imshow(ndi.rotate(img_cambios_cerebro[:, :, img], 180), cmap='bwr', vmin=-100, vmax=100, alpha=0.5)
-    #     axs.flat[idx].axis('off')
-
-    # plt.savefig(output_graphs + "/graph6.png")
-    # plt.figure(6)
-
-    # plt.tight_layout()
-    # # plt.show()
-
