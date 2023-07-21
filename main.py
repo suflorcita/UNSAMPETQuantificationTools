@@ -16,17 +16,17 @@ if __name__ == '__main__':
         subject = sys.argv[3]
         output_path = sys.argv[4]
     else:
-        path_PET_image = "/home/sol/PET_MRI/Procesado/022_S_4291/Nifti/FDG-PET"
-        path_MRI_image = "/home/sol/PET_MRI/Procesado/022_S_4291/Nifti/RMN/MPRAGE.nii.gz"
-        subject = "022_S_4291"
-        output_path = "/home/sol/PET_MRI/Procesado/"
+        path_PET_image = "./FDG-PET.nii.gz"
+        path_MRI_image = "./T1_MPRAGE.nii.gz"
+        subject = "anonymous"
+        output_path = "./"
 
     # Path ATLAS
-    path_MNI_152_T1 = "ATLAS/MNI152_T1_1mm.nii.gz"
-    path_MNI_152_T1_brain = "ATLAS/MNI152_T1_1mm_brain.nii.gz"
-    path_MNI_152_PET = "ATLAS/MNI152_PET_1mm.nii"
-    path_Hammers = "ATLAS/Hammers_mith-n30r95-MaxProbMap-gm-MNI152-SPM12.nii.gz"
-    path_DKT_MNI152 = "ATLAS/"
+    path_MNI_152_T1 = "./data/atlas/MNI152_T1_1mm.nii.gz"
+    path_MNI_152_T1_brain = "./data/atlas/MNI152_T1_1mm_brain.nii.gz"
+    path_MNI_152_PET = "./data/atlas/MNI152_PET_1mm.nii"
+    path_Hammers = "./data/atlas/Hammers_mith-n30r95-MaxProbMap-gm-MNI152-SPM12.nii.gz"
+    path_DKT_MNI152 = "./data/atlas/"
 
     # labels segmentation
     labels_FS_csv_path = "Labels/FS_labels.csv"
