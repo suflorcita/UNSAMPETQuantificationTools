@@ -46,10 +46,6 @@ if __name__ == '__main__':
 
         recon_all_command = f"recon-all -s {subject} -i {path_MRI_image} -sd {subject_dir} -all -parallel -openmp 16"
 
-        # Set environment variables
-        os.environ['FREESURFER_HOME'] = '/usr/local/freesurfer/7.3.2'
-        os.environ['PATH'] = '/usr/local/freesurfer/7.3.2/bin:/usr/local/freesurfer/7.3.2/mni/bin:' + os.environ['PATH']
-        os.environ['FS_LICENSE'] = '/home/sol/license.txt'
         subprocess.run([recon_all_command], shell=True)
 
     path_T1_FS_mgz = subject_dir + "/" + subject + "/mri/T1.mgz"
