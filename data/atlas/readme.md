@@ -1,4 +1,4 @@
-# ATLASES USED IN THE UNSAM PET QUANTIFICATION TOOLS
+# ATLAS USED IN THE UNSAM PET QUANTIFICATION TOOLS
 
 Please copy in this path the following atlases:
 1) MNI152 T1 atlas with and without skull.It can be downloaded from: \
