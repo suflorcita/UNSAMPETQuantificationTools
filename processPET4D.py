@@ -38,7 +38,9 @@ def register_PET_MRI(PET_image, MRI_image):
 
         for image in images:
             path_image = PET_image + "/" + image
-            PET_images.append(sitk.ReadImage(path_image))
+            image_pet = sitk.ReadImage(path_image)
+            image_pet = sitk.Cast(image_pet, sitk.sitkFloat32)  # cast
+            PET_images.append(image_pet)
     else:
         image = sitk.ReadImage(PET_image)
         if len(image.GetSize()) == 4:
@@ -70,7 +72,7 @@ def register_PET_MRI(PET_image, MRI_image):
     txPET2MRI = result_registration["tx"]
 
 
-    return sum_pet_3d_image, register_pet_t1, txPET2MRI
+    return PET_images, sum_pet_3d_image, register_pet_t1, txPET2MRI
 
 
 if __name__ == '__main__':

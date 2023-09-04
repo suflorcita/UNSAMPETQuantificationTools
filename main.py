@@ -1,4 +1,5 @@
 import processPET4D as reg
+import ImageRegistration as imreg
 import SimpleITK as sitk
 import subprocess
 import pandas as pd
@@ -93,41 +94,41 @@ if __name__ == '__main__':
 
         aseg = False
 
-        # Registration: PET + RMN
+    # Registration: PET + RMN
 
-        # Do PET + RMN registration when dir doesnt exist
-        path_PET_registration = output_path + "/Registration/"
-        registration_image_path = path_PET_registration + "/Registration_image_PET_T1.nii.gz"
-        pet_3d_image_path = path_PET_registration + "/PET_sum_image.nii.gz"
+    # Do PET + RMN registration when dir doesnt exist
+    path_PET_registration = output_path + "/Registration/"
+    registration_image_path = path_PET_registration + "/Registration_image_PET_T1.nii.gz"
+    pet_3d_image_path = path_PET_registration + "/PET_sum_image.nii.gz"
 
-        if not os.path.exists(path_PET_registration):
-            os.mkdir(path_PET_registration)
+    if not os.path.exists(path_PET_registration):
+        os.mkdir(path_PET_registration)
 
-        PET_frames, pet_3d_image, register_image, tx_PET_2_RMN = reg.register_PET_MRI(path_PET_image, path_T1)
+    PET_frames, pet_3d_image, register_image, tx_PET_2_RMN = reg.register_PET_MRI(path_PET_image, path_T1)
 
-        # Write Euler transform (PET to RMN)
-        path_transform = os.path.join(path_PET_registration, 'tx_PET_2_RMN.tfm')
-        sitk.WriteTransform(tx_PET_2_RMN, path_transform)
+    # Write Euler transform (PET to RMN)
+    path_transform = os.path.join(path_PET_registration, 'tx_PET_2_RMN.tfm')
+    sitk.WriteTransform(tx_PET_2_RMN, path_transform)
 
-        # Write registered image (RMN + PET) and PET sum image
-        sitk.WriteImage(register_image, registration_image_path)
-        sitk.WriteImage(pet_3d_image, pet_3d_image_path)
+    # Write registered image (RMN + PET) and PET sum image
+    sitk.WriteImage(register_image, registration_image_path)
+    sitk.WriteImage(pet_3d_image, pet_3d_image_path)
 
-        path_individual_frames = []
+    path_individual_frames = []
 
-        # Write every individual frame
-        for i, PET_image in enumerate(PET_frames, start=1):
-            path_frame = path_PET_registration + f'FRAME_{i}/'
+    # Write every individual frame
+    for i, PET_image in enumerate(PET_frames, start=1):
+        path_frame = path_PET_registration + f'FRAME_{i}/'
 
-            if not os.path.exists(path_frame):
-                os.mkdir(path_frame)
+        if not os.path.exists(path_frame):
+            os.mkdir(path_frame)
 
-            path_individual_frames.append(path_frame)
+        path_individual_frames.append(path_frame)
 
-            path_PET_image = path_frame + "PET_image_register.nii.gz"
-            sitk.WriteImage(PET_image, path_PET_image)
+        path_PET_image = path_frame + "PET_image_register.nii.gz"
+        sitk.WriteImage(PET_image, path_PET_image)
 
-        print("Registration: ok")
+    print("Registration: ok")
 
     # Normalization:
 
