@@ -27,7 +27,8 @@ This project relies on several Python libraries for its operation. Make sure you
 - pandas
 - subprocess
 - os
-
+  matplotlib
+  
 ## Command Line Usage 
 
 To run this project, clone the repository to your local machine and navigate to the project directory in the terminal. Then, use the following command to execute the main script:
