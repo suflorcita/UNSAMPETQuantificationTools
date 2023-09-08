@@ -28,7 +28,7 @@ This project relies on several Python libraries for its operation. Make sure you
 - subprocess
 - os
 - shutil 
-  matplotlib
+- matplotlib
   
 ## Command Line Usage 
 
