@@ -27,17 +27,26 @@ This project relies on several Python libraries for its operation. Make sure you
 - pandas
 - subprocess
 - os
+- shutil 
   matplotlib
   
 ## Command Line Usage 
 
 To run this project, clone the repository to your local machine and navigate to the project directory in the terminal. Then, use the following command to execute the main script:
 
-```bash
-python3 main.py path_PET path_MRI subject_name output_folder
-```
+If MRI script exist: 
 
-For example: 
+```bash
+python3 main.py path_PET path_MRI subject_name output_dir
+```
+If you have only an individual PET image 
+```bash
+python3 main.py path_PET subject_name output_dir
+```
+path_PET: Path to the PET image.
+path_MRI: Path to the MRI image.
+subject_name: Name of the subject being processed.
+output_dir: Directory where processed data is to be saved.
 
 
 
