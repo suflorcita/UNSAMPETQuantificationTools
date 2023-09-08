@@ -44,8 +44,11 @@ If you have only an individual PET image
 python3 main.py path_PET subject_name output_dir
 ```
 path_PET: Path to the PET image.
+
 path_MRI: Path to the MRI image.
+
 subject_name: Name of the subject being processed.
+
 output_dir: Directory where processed data is to be saved.
 
 
