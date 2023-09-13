@@ -19,6 +19,8 @@ The pipeline is developed for use on a Linux system. To use this tool, you will 
 
 Please follow the installation instructions provided by the developers for these tools.
 
+On line 300, update the variable from "ANTs_path" to refer to "antsRegistrationSyN.sh" script 
+
 ## Python libraries requirements
 
 This project relies on several Python libraries for its operation. Make sure you have these libraries installed in your Python environment:
