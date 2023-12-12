@@ -309,14 +309,14 @@ if __name__ == '__main__':
         print("ANT: ok")
 
         # ANT transform
-        path_ANT_apply_transform = "/usr/local/ANTs/bin/antsApplyTransforms"
+        # path_ANT_apply_transform = "/usr/local/ANTs/bin/antsApplyTransforms"
         path_ANT_transform1 = path_ANT_image + "1Warp.nii.gz"
         path_ANT_transform2 = path_ANT_image + "0GenericAffine.mat"
 
         # Apply ANT transform to PET
         path_ANT_PET = path_ANT_images + "/PET_Norm_MNI_152_ANT.nii.gz"
 
-        ANT_transform_PET_command = f"{path_ANT_apply_transform} -d 3 -i {path_FLIRT_PET} " \
+        ANT_transform_PET_command = f"antsApplyTransforms -d 3 -i {path_FLIRT_PET} " \
                                     f"-r {path_MNI_152_T1_brain} -o {path_ANT_PET}  " \
                                     f"-t {path_ANT_transform1} -t {path_ANT_transform2}"
 
@@ -326,7 +326,7 @@ if __name__ == '__main__':
         if aseg:
             path_ANT_segmentation = path_ANT_images + "/Aseg_Norm_MNI_152_ANT.nii.gz"
 
-            ANT_transform_segmentation_command = f"{path_ANT_apply_transform} -d 3 -i {path_FLIRT_segmentation} " \
+            ANT_transform_segmentation_command = f"antsApplyTransforms -d 3 -i {path_FLIRT_segmentation} " \
                                         f"-r {path_MNI_152_T1_brain} " \
                                         f"-o {path_ANT_segmentation}  " \
                                         f"-t {path_ANT_transform1} -t {path_ANT_transform2} -n NearestNeighbor "
