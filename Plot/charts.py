@@ -1,3 +1,5 @@
+import os.path
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np 
@@ -152,16 +154,21 @@ if __name__ == '__main__':
 
     # images
     if len(sys.argv) > 1:
-        output_charts = sys.argv[1]
-        subject_folder = sys.argv[2]
-        subject_name = sys.argv[3]
+        #output_charts = sys.argv[1]
+        subject_folder = sys.argv[1]
+        subject_name = sys.argv[2]
     else:
         output_charts = "../Procesado/SubjectCEUNIM/charts"
         CSV_folder = "../Procesado/SubjectCEUNIM/CSV"
         subject_name = "SubjectCEUNIM"
 
+    output_charts = os.path.join(subject_folder, "charts")
+    if not os.path.exists(output_charts):
+        os.mkdir(output_charts)
 
-    CSV_folder = subject_folder + "/CSV"
+    CSV_folder = os.path.join(subject_folder, "CSV")
+
+
     # Bar chart mean for brain structure
 
 
