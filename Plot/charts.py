@@ -115,7 +115,7 @@ def plot_images(img_T1, img_brain_changes, n):
 
     
 
-def intensity_regions_bar_chart(regions, intensity1, intensity2, colors=None, hemisphere=None, title=None):
+def intensity_regions_bar_chart(regions, intensity1, intensity2, legend_position=(1.001, 1.14), colors=None, hemisphere=None, title=None):
     """
         Creates a bar chart using the brain regions in the x-axis and the signal intensity in the y-axis.
 
@@ -143,7 +143,7 @@ def intensity_regions_bar_chart(regions, intensity1, intensity2, colors=None, he
     if title != None: plt.title(title, size=16)
     else:
         plt.title("Plot by intensities", size=16)
-    plt.legend(bbox_to_anchor=(1.001, 1), fontsize='small')
+    plt.legend(bbox_to_anchor=legend_position, fontsize='small')
     plt.subplots_adjust(right=0.80)
 
 
@@ -278,7 +278,7 @@ if __name__ == '__main__':
     j += 1
     plt.figure(j)
     intensity_regions_bar_chart(regions_top_ten, intensity_top_ten_subject_normalization,
-                                intensity_top_ten_MNI152_normalization,
+                                intensity_top_ten_MNI152_normalization, legend_position=(1, 1),
                                 title="Top 10 regions")
     name_chart = f'{output_charts}/{subject_name}_top_ten_regions.png'
 
