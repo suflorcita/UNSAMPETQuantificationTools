@@ -4,6 +4,7 @@ import numpy as np
 import SimpleITK as sitk
 import sys
 from scipy import ndimage as ndi
+from nilearn import plotting, datasets, surface
 
 
 def resample_sitk(input_image, reference_image):
@@ -74,8 +75,8 @@ def mean_dataframe(df_intensity_region):
         structure_left = structures.loc[structures["hemisphere"] == "L"]
         structure_right = structures.loc[structures["hemisphere"] == "R"]
 
-        value_left = float(structure_left["normalization"])
-        value_right = float(structure_right["normalization"])
+        value_left = float(structure_left["normalization"].iloc[0])
+        value_right = float(structure_right["normalization"].iloc[0])
         value_mean = row["normalization"]
 
         error = abs(((value_left - value_right) / value_mean) * 100)
@@ -88,11 +89,11 @@ def mean_dataframe(df_intensity_region):
     return df_mean_regions
 
 
-def plot_images(img_T1, img_cambios_cerebro, n): 
+def plot_images(img_T1, img_brain_changes, n):
     fig_rows = 4
     fig_cols = 4
     n_subplots = fig_rows * fig_cols
-    n_slice = img_cambios_cerebro.shape[0]
+    n_slice = img_brain_changes.shape[0]
     step_size = n_slice // n_subplots
     plot_range = n_subplots * step_size
     start_stop = int((n_slice - plot_range) / 2)
@@ -103,13 +104,13 @@ def plot_images(img_T1, img_cambios_cerebro, n):
     for idx, img in enumerate(range(start_stop, plot_range, step_size)):
         if n == 0: 
             axs.flat[idx].imshow(img_T1[img, :, :], cmap='gray', alpha=1)
-            axs.flat[idx].imshow(img_cambios_cerebro[img, :, :], cmap=cmap, vmin=-50, vmax=50, alpha=0.5)
+            axs.flat[idx].imshow(img_brain_changes[img, :, :], cmap=cmap, vmin=-50, vmax=50, alpha=0.5)
         elif n == 1: 
             axs.flat[idx].imshow(ndi.rotate(img_T1[:, img, :],180), cmap='gray', alpha=1)
-            axs.flat[idx].imshow(ndi.rotate(img_cambios_cerebro[:, img, :], 180), cmap=cmap, vmin=-50, vmax=50, alpha=0.5)
+            axs.flat[idx].imshow(ndi.rotate(img_brain_changes[:, img, :], 180), cmap=cmap, vmin=-50, vmax=50, alpha=0.5)
         elif n == 2: 
             axs.flat[idx].imshow(ndi.rotate(img_T1[:, :, img],180), cmap='gray', alpha=1)
-            axs.flat[idx].imshow(ndi.rotate(img_cambios_cerebro[:, :, img], 180), cmap=cmap, vmin=-50, vmax=50, alpha=0.5)
+            axs.flat[idx].imshow(ndi.rotate(img_brain_changes[:, :, img], 180), cmap=cmap, vmin=-50, vmax=50, alpha=0.5)
         axs.flat[idx].axis('off')
 
     
@@ -135,13 +136,13 @@ def intensity_regions_bar_chart(regions, intensity1, intensity2, colors=None, he
     plt.bar(y_pos-0.2, intensity_pet[0], color='orange', width= 0.4, label=regions_graph)
     plt.bar(y_pos+0.2, intensity_pet[1], color='cornflowerblue', width= 0.4)
 
-    plt.xlabel("Regiones", size=16)
-    plt.ylabel("Intensidad", size=16)
+    plt.xlabel("Regions", size=16)
+    plt.ylabel("Intensity", size=16)
     plt.xticks([i for i in range(len(regions))])
 
     if title != None: plt.title(title, size=16)
     else:
-        plt.title("Gráfico por intensidades", size=16)
+        plt.title("Plot by intensities", size=16)
     plt.legend(bbox_to_anchor=(1.001, 1), fontsize='small')
     plt.subplots_adjust(right=0.80)
 
@@ -189,7 +190,7 @@ if __name__ == '__main__':
         chart_df["intensity_subject"] = intensity_subject
         chart_df = chart_df.dropna()
 
-        name_chart = f"Intensidad por región normalizado al cerebelo {j}"
+        name_chart = f"Intensity by region normalized to the cerebellum {j}"
 
         plt.figure(j)
         intensity_regions_bar_chart(chart_df["name_regions"], chart_df["intensity_subject"], chart_df["intensity_MNI152"],
@@ -220,7 +221,7 @@ if __name__ == '__main__':
     j += 1
     plt.figure(j)
     intensity_regions_bar_chart(regions_mean, intensity_mean_Subject_normalization, intensity_mean_MNI152_normalization,
-                                title="Grafico por intensidades, promedio por región")
+                                title="Plot by intensities, mean per region")
     name_chart = f'{output_charts}/{subject_name}_mean_intensity.png'
 
     # Set figure size
@@ -286,62 +287,58 @@ if __name__ == '__main__':
     fig.set_size_inches(16, 8)  # Set the size in inches (width, height)
     plt.savefig(name_chart, dpi=600)
 
-    # Read ATLAS Hammers 
-    atlas_Hammers = "ATLAS/Hammers_mith-n30r95-MaxProbMap-gm-MNI152-SPM12.nii.gz"
+
+
+    # Read ATLAS Hammers
+    atlas_Hammers = "../data/atlas/Hammers_mith-n30r95-MaxProbMap-gm-MNI152-SPM12.nii.gz"
     sitk_atlas_hammers = sitk.ReadImage(atlas_Hammers)
 
-    # Cambios cerebro
-    cambios_cerebro = subject_folder + "/Synthetic_Image/synthetic_image_changes.nii.gz"
-    img_cambios_cerebro = sitk.ReadImage(cambios_cerebro)
-    img_cambios_cerebro = sitk.GetArrayFromImage(img_cambios_cerebro)
+    # Brain changes
+    brain_changes = subject_folder + "/Synthetic_Image/synthetic_image_changes.nii.gz"
+    img_brain_changes = sitk.ReadImage(brain_changes)
+    img_brain_changes = sitk.GetArrayFromImage(img_brain_changes)
 
     # read T1 normalizada
-    path_T1 = subject_folder + "ANTs/T1_Norm_MNI_152_ANTWarped.nii.gz"
+    path_T1 = subject_folder + "/ANTs/T1_Norm_MNI_152_ANTWarped.nii.gz"
     sitk_T1 = sitk.ReadImage(path_T1)
    
     # resample to Hammers
     sitk_T1 = resample_sitk(sitk_T1, sitk_atlas_hammers)
     img_T1 = sitk.GetArrayFromImage(sitk_T1)
 
-    sitk.WriteImage(sitk_T1, subject_folder + "T1_resampleado_only_brain.nii.gz")
+    # T1 resample
+    T1_resample = subject_folder + "/T1_resamplaeado_only_brain.nii.gz"
+
+    sitk.WriteImage(sitk_T1, T1_resample)
 
     # Plot brain images 
-    plot_images(img_T1, img_cambios_cerebro, 0)
-    name_chart = f'{output_charts}/{subject_name}_brain1.png'
-    plt.savefig("brain1.png")
+    plot_images(img_T1, img_brain_changes, 0)
+    name_chart1 = f'{output_charts}/{subject_name}_brain1.png'
+    plt.savefig(name_chart1)
 
-    plot_images(img_T1, img_cambios_cerebro, 1)
-    name_chart = f'{output_charts}/{subject_name}_brain2.png'
-    plt.savefig("brain1.png")
+    plot_images(img_T1, img_brain_changes, 1)
+    name_chart2 = f'{output_charts}/{subject_name}_brain2.png'
+    plt.savefig(name_chart2)
 
-    plot_images(img_T1, img_cambios_cerebro, 2)
-    name_chart = f'{output_charts}/{subject_name}_brain3.png'
-    plt.savefig("brain3.png")
+    plot_images(img_T1, img_brain_changes, 2)
+    name_chart3 = f'{output_charts}/{subject_name}_brain3.png'
+    plt.savefig(name_chart3)
 
     print(f"charts {subject_name}:ok")
 
+    # Hipometabolism maps
+    ax0 = plt.subplot()
+    plotting.plot_stat_map(brain_changes, bg_img=T1_resample,
+                           annotate=False,
+                           cmap="bwr", black_bg=False, cut_coords=(-3, -40, 15), display_mode="ortho", axes=ax0,
+                           threshold=10, vmax=50)
+    maps = f'{output_charts}/{subject_name}_maps.png'
+    
+    ax0.remove()
+
+    plt.savefig(maps)
 
 
 
-    # # Charts
-    #
-    # regions = regions_10_MNI_152["structure"]
-    # hemispheres = regions_10_MNI_152["hemisphere"]
 
-    # name_regions = []
-
-    # for i, region in enumerate(regions):
-    #     name_region = region + "-" + hemispheres[i]
-    #     name_regions.append(name_region)
-
-    # intensity_10_Subject = regions_10_MNI_152["normalization"]
-    # intensity_10_MNI152 = regions_10_Subject["normalization"]
-
-    # plt.savefig(output_graphs + "/graph2.png")
-
-    # plt.figure(3)
-
-    # intensity_regions_bar_chart(name_regions, intensity_10_Subject, intensity_10_MNI152,
-    #                             title="Regions de mayor cambio")
-
-    # plt.savefig(output_graphs + "/graph3.png")
+   
