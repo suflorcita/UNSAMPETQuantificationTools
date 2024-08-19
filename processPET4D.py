@@ -2,6 +2,7 @@ import os
 
 import SimpleITK as sitk
 import matplotlib.pyplot as plt
+
 import ImageRegistration as reg
 
 
@@ -60,10 +61,12 @@ def register_PET_MRI(PET_image, MRI_image):
         resultReg = reg.RigidImageRegistration(PET_images[i], reference_PET_image, printLog=True)
         PET_images[i] = resultReg['image']
 
-    # Compute the sum
-    sum_pet_3d_image  = PET_images[0]
-    for image in PET_images[1:]:
-        sum_pet_3d_image = sitk.Add(sum_pet_3d_image , image)
+    # Compute the sum of PET images
+    sum_pet_3d_image = sitk.Image(reference_PET_image.GetSize(), reference_PET_image.GetPixelID())
+    sum_pet_3d_image.CopyInformation(reference_PET_image)
+
+    for image in PET_images:
+        sum_pet_3d_image = sitk.Add(sum_pet_3d_image, image)
 
     # Register to t1 using the sum
     result_registration = reg.RigidImageRegistration(sum_pet_3d_image, MRI_image, printLog=True)
@@ -73,6 +76,31 @@ def register_PET_MRI(PET_image, MRI_image):
 
 
     return PET_images, sum_pet_3d_image, register_pet_t1, txPET2MRI
+
+def read_and_apply_tx(tx_file, image, ref_image = []):
+
+    # Read the transform file
+    with open(tx_file, 'r') as f:
+        lines = f.readlines()
+
+    # Initialize variables to store the parameters
+    parameters = None
+    fixed_parameters = None
+
+    # Loop through the lines and find the line starting with "Parameters"
+    for line in lines:
+        if line.startswith("Parameters:"):
+            parameters = list(map(float, line.strip().split(": ")[1].split()))
+        elif line.startswith("FixedParameters:"):
+            fixed_parameters = list(map(float, line.strip().split(": ")[1].split()))
+
+    # Create the tx
+    transform = sitk.Euler3DTransform()
+    transform.SetParameters(parameters)
+    transform.SetFixedParameters(fixed_parameters)
+
+    output_image = reg.ApplyRegTransform(image, transform, refImage=ref_image, interpolator=sitk.sitkLinear)
+    return output_image
 
 
 if __name__ == '__main__':

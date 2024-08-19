@@ -1,4 +1,4 @@
-i#!/usr/bin/env python3
+#!/usr/bin/env python3
 
 import processPET4D as reg
 import argparse
@@ -66,7 +66,15 @@ if __name__ == '__main__':
     freesurfer = args.freesurfer
 
     # Get the directory where the script is located
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Check if the current file is a symbolic link
+    if os.path.islink(__file__):
+        # Resolve the symbolic link
+        script_path = os.readlink(__file__)
+        # Get the directory containing the symbolic link
+        script_dir = os.path.dirname(os.path.abspath(script_path))
+    else:
+        # Use the directory of the original file
+        script_dir = os.path.dirname(os.path.abspath(__file__))
 
     if path_PET_image == None:
         path_PET_image = os.path.join(script_dir, "./FDG-PET.nii.gz")
@@ -99,7 +107,30 @@ if __name__ == '__main__':
     # Output
     output_path = os.path.join(output_path, subject)
 
+    # # If PET is a dir
+    # if os.path.isdir(path_PET_image):
+    #     output_fdg_path = os.path.join(output_path, "unique_fdg_pet_image.nii.gz")
+    #     fdg_files = sorted(
+    #         [os.path.join(path_PET_image, f) for f in os.listdir(path_PET_image) if f.endswith('.nii') or f.endswith('.nii.gz')])
+    #
+    #     # Load each image and add to a list
+    #     pet_images = []
+    #     for fdg_file in fdg_files[:]:  # Take the first 4 images
+    #         pet_img = sitk.ReadImage(fdg_file)
+    #         pet_images.append(pet_img)
+    #
+    #     # Combine the images along a new dimension (creating a 4D image)
+    #     combined_fdg_image = sitk.JoinSeries(pet_images)
+    #
+    #     # Save the combined image
+    #     sitk.WriteImage(combined_fdg_image, output_fdg_path)
+    #
+    #     path_PET_image = output_fdg_path
+
+
     path_PET_final = None
+    path_normalized_MRI_image = None
+    path_normalized_PET_image = None
 
     if not os.path.exists(output_path):
         os.mkdir(output_path)
@@ -304,7 +335,7 @@ if __name__ == '__main__':
             os.mkdir(path_PET_registration_dir)
 
         PET_frames, PET_3d_image, PET_registered_to_MRI, tx_PET_2_MRI = reg.register_PET_MRI(path_PET_image, path_T1)
-        # PET_frames: List of egistered PET frames to the first image
+        # PET_frames: List of registered PET frames to the first image
         # PET_3D_image: Sum of all PET frames (if more than one) registered to the first one.
         # PET_registered_to_MRI: Sum of all PET frames registered to MRI
         # tx_PET_2_RMN: Transformation of PET registered to MRI.
@@ -338,7 +369,9 @@ if __name__ == '__main__':
                 # Register the frame to the MRI image using the PET-to-MRI transform
                 # then write the image.
                 path_PET_frame_registered_to_MRI = os.path.join(path_frame, f"PET_frame_to_MRI_{i}.nii.gz")
-                PET_frame_registered_to_MRI = sitk.Resample(registered_frame, tx_PET_2_MRI, sitk.sitkLinear, 0.0, registered_frame.GetPixelID())
+
+                # TO DO: Read Transform and apply
+                PET_frame_registered_to_MRI = reg.read_and_apply_tx(path_transform, registered_frame, ref_image=PET_registered_to_MRI)
                 sitk.WriteImage(PET_frame_registered_to_MRI, path_PET_frame_registered_to_MRI)
 
             path_PET_final = path_PET_registered_to_MRI  # Set the reference PET as the PET image registered to MRI
@@ -350,12 +383,12 @@ if __name__ == '__main__':
         # Flirt
         # Apply FLIRT to T1
         if args.flirt:
-            path_flirt_images = output_path + "/FLIRT/"
+            path_flirt_images = os.path.join(output_path, "FLIRT")
             if not os.path.exists(path_flirt_images):
                 os.mkdir(path_flirt_images)
 
-            path_FLIRT_image = path_flirt_images + "/T1_Norm_MNI_152_FLIRT.nii.gz"
-            path_FLIRT_tx = path_flirt_images + "/T1_Norm_MNI_152_FLIRT.mat"
+            path_FLIRT_image = os.path.join(path_flirt_images, "T1_Norm_MNI_152_FLIRT.nii.gz")
+            path_FLIRT_tx = os.path.join(path_flirt_images, "T1_Norm_MNI_152_FLIRT.mat")
 
             flirt_command = f"flirt -in {path_T1} -ref {path_MNI_152_T1} -out {path_FLIRT_image} -omat {path_FLIRT_tx} -interp trilinear -dof 12"
             subprocess.run([flirt_command], shell=True)
@@ -363,12 +396,14 @@ if __name__ == '__main__':
             print("FLIRT: ok")
 
             # Apply FLIRT transform to T1 only brain
-            path_FLIRT_t1 = path_flirt_images + "/T1_brain_MNI_152_FLIRT.nii.gz"
+            path_flirt_MRI = os.path.join(path_flirt_images, "T1_brain_MNI_152_FLIRT.nii.gz")
             flirt_apply_transform_t1_brain_command = f"flirt -in {path_T1_brain} -applyxfm -init {path_FLIRT_tx} " \
-                                                f"-out {path_FLIRT_t1} " \
+                                                f"-out {path_flirt_MRI} " \
                                                 f"-paddingsize 0.0 -interp trilinear -ref {path_MNI_152_T1_brain}"
-            subprocess.run([flirt_apply_transform_t1_brain_command], shell=True)
 
+            path_normalized_MRI_image = path_flirt_MRI
+            subprocess.run([flirt_apply_transform_t1_brain_command], shell=True)
+            print(flirt_command)
 
 
             # Apply FLIRT transform to PET Image
@@ -379,16 +414,17 @@ if __name__ == '__main__':
             subprocess.run([flirt_apply_transform_PET_command], shell=True)
 
             path_PET_final = path_FLIRT_PET
+            path_normalized_PET_image = path_FLIRT_PET
             # If exists, apply FLIRT transform to segmentation image
             if aseg:
                 path_FLIRT_segmentation = path_flirt_images + "/aseg_Norm_MNI_152_FLIRT.nii.gz"
                 flirt_apply_transform_aseg_command = f"flirt -in {path_segmentation} -applyxfm -init {path_FLIRT_tx} " \
                                                 f"-out {path_FLIRT_segmentation} " \
                                                 f"-paddingsize 0.0 -interp nearestneighbour -ref {path_MNI_152_T1_brain}"
-                path_aseg_segmentation = path_FLIRT_segmentation
+                path_normalized_aseg_segmentation = path_FLIRT_segmentation
                 subprocess.run([flirt_apply_transform_aseg_command], shell=True)
         else:
-            path_FLIRT_t1 = None
+            path_flirt_MRI = None
             path_FLIRT_PET = None
             path_FLIRT_segmentation = None
 
@@ -396,10 +432,10 @@ if __name__ == '__main__':
 
         if args.ants:
             # T1
-            if path_FLIRT_t1 == None:
+            if path_flirt_MRI == None:
                 path_ANT_input_t1 = path_T1
             else:
-                path_ANT_input_t1 = path_FLIRT_t1
+                path_ANT_input_t1 = path_flirt_MRI
 
             # PET
             if path_FLIRT_PET == None:
@@ -417,23 +453,26 @@ if __name__ == '__main__':
 
             # Install ANTs and set environment variables in antsRegistrationSyNQuick.sh script
             ANT_path = "antsRegistrationSyN.sh"
-            path_ANT_images = output_path + "/ANTs/"
+            path_ANT_images = os.path.join(output_path, "ANTs")
             if not os.path.exists(path_ANT_images):
                 os.mkdir(path_ANT_images)
 
-            path_ANT_image = path_ANT_images + "/T1_Norm_MNI_152_ANT"
+            path_ANT_image = os.path.join(path_ANT_images, "T1_Norm_MNI_152_ANT")
             ANT_command = f"{ANT_path} -d 3 -f {path_MNI_152_T1_brain} -m {path_ANT_input_t1} -o {path_ANT_image}"
+            print(ANT_command)
             subprocess.run([ANT_command], shell=True)
+
+            path_normalized_MRI_image = path_ANT_image +  "Warped.nii.gz"
 
             print("ANT: ok")
 
             # ANT transform
-            path_ANT_apply_transform = "/usr/local/ANTs/bin/antsApplyTransforms"
+            path_ANT_apply_transform = "antsApplyTransforms"
             path_ANT_transform1 = path_ANT_image + "1Warp.nii.gz"
             path_ANT_transform2 = path_ANT_image + "0GenericAffine.mat"
 
             # Apply ANT transform to PET
-            path_ANT_PET = path_ANT_images + "/PET_Norm_MNI_152_ANT.nii.gz"
+            path_ANT_PET = os.path.join(path_ANT_images, "PET_Norm_MNI_152_ANT.nii.gz")
 
             ANT_transform_PET_command = f"{path_ANT_apply_transform} -d 3 -i {path_ANT_input_PET} " \
                                         f"-r {path_MNI_152_T1_brain} -o {path_ANT_PET}  " \
@@ -442,6 +481,7 @@ if __name__ == '__main__':
             subprocess.run([ANT_transform_PET_command], shell=True)
 
             path_PET_final = path_ANT_PET
+            path_normalized_PET_image = path_ANT_PET
 
             # If exists, apply ANT transform to segmentation image
             if aseg:
@@ -451,6 +491,7 @@ if __name__ == '__main__':
                                             f"-r {path_MNI_152_T1_brain} " \
                                             f"-o {path_ANT_segmentation}  " \
                                             f"-t {path_ANT_transform1} -t {path_ANT_transform2} -n NearestNeighbor "
+                path_normalized_aseg_segmentation = path_ANT_segmentation
 
                 subprocess.run([ANT_transform_segmentation_command], shell=True)
 
@@ -460,19 +501,25 @@ if __name__ == '__main__':
     df_labels_Hammers = pd.read_csv(labels_Hammers_csv_path)
 
     if not args.ants and not args.flirt:
-        path_flirt_image = os.path.join(output_path, "FLIRT", "PET_Norm_MNI_152_FLIRT.nii.gz")
-        path_FLIRT_segmentation = os.path.join(output_path, "FLIRT", "aseg_Norm_MNI_152_FLIRT.nii.gz")
-        path_ant_image = os.path.join(output_path, "ANTs", "PET_Norm_MNI_152_ANT.nii.gz")
-        path_ANT_segmentation = os.path.join(output_path, "ANTs", "Aseg_Norm_MNI_152_ANT.nii.gz")
+        path_normalized_PET_flirt_image = os.path.join(output_path, "FLIRT", "PET_Norm_MNI_152_FLIRT.nii.gz")
+        path_normalized_segmentation_flirt_image = os.path.join(output_path, "FLIRT", "aseg_Norm_MNI_152_FLIRT.nii.gz")
+        path_normalized_MRI_flirt_imag = os.path.join(output_path, "FLIRT", "T1_brain_MNI_152_FLIRT.nii.gz")
 
-        if os.path.exists(path_ant_image):
-            path_PET_final = path_ant_image
+        path_normalized_PET_ant_image = os.path.join(output_path, "ANTs", "PET_Norm_MNI_152_ANT.nii.gz")
+        path_normalized_segmentation_ant_image = os.path.join(output_path, "ANTs", "Aseg_Norm_MNI_152_ANT.nii.gz")
+        path_normalized_MRI_ant_image = os.path.join(output_path, "ANTs","T1_Norm_MNI_152_ANTWarped.nii.gz")
+
+        if os.path.exists(path_normalized_PET_ant_image):
+            path_normalized_PET_image = path_normalized_PET_ant_image
+            path_normalized_MRI_image = path_normalized_MRI_ant_image
             if freesurfer:
-                path_aseg_segmentation = path_ANT_segmentation
-        elif os.path.exists(path_flirt_image):
-            path_PET_final = path_flirt_image
+                path_normalized_aseg_segmentation = path_normalized_segmentation_ant_image
+
+        elif os.path.exists(path_normalized_PET_flirt_image):
+            path_normalized_PET_image = path_normalized_PET_flirt_image
+            path_normalized_MRI_image = path_normalized_MRI_flirt_imag
             if freesurfer:
-                path_aseg_segmentation = path_FLIRT_segmentation
+                path_normalized_aseg_segmentation = path_normalized_segmentation_flirt_image
     else:
         exit("No Normalized Image")
 
@@ -489,13 +536,12 @@ if __name__ == '__main__':
 
 
     # Quantification FDG-PET in subject to process (Hammers atlas)
-    image_PET = sitk.ReadImage(path_PET_final)
+    image_PET = sitk.ReadImage(path_normalized_PET_image)
 
     # Quantification Using Hammers atlas
     image_Hammers = sitk.ReadImage(path_Hammers)
-    image_aseg_segmentation = sitk.ReadImage(path_aseg_segmentation)
+    image_aseg_segmentation = sitk.ReadImage(path_normalized_aseg_segmentation)
 
-    print(image_PET)
 
     df_subject_intensity, image_subject_intensity = quant.PET_FDG_quantification(image_PET, image_Hammers,
                                                                                  df_labels_Hammers,
@@ -739,6 +785,28 @@ if __name__ == '__main__':
     # norm_image = norm.intensity_normalization(brain_image, mode=("cerebellum", cerebellum))
     # sitk.WriteImage(norm_image, output_path + "/intensity_normalization_image.nii.gz")
 
+    # Final Dir (Final files
+    path_final_dir = os.path.join(output_path, "Final")
+    path_final_PET_normalized_image = os.path.join(path_final_dir, "spatial_normalized_pet_image.nii.gz")
+    path_final_MRI_normalized_image = os.path.join(path_final_dir, "spatial_normalized_mri_image.nii.gz")
+
+    path_CSV_final_dir = os.path.join(path_final_dir, "CSV")
+    path_Normalized_final_dir = os.path.join(path_final_dir, "Normalized")
+    path_Registration_final_dir = os.path.join(path_final_dir, "Registration")
+
+    if not os.path.exists(path_final_dir):
+        os.mkdir(path_final_dir)
+
+    # Copy PET and MRI
+    shutil.copy2(path_normalized_MRI_image, path_final_MRI_normalized_image)
+    shutil.copy2(path_normalized_PET_image, path_final_PET_normalized_image)
+
+    # Copy CSV, Registered and Normalized image
+    shutil.copytree(path_CSV_files,path_CSV_final_dir)
+    shutil.copytree(path_normalization_images, path_Normalized_final_dir)
+    shutil.copytree(path_PET_registration_dir,path_Registration_final_dir)
+
+    # Normalized PET image
 
 
     # Basic Data Analysis (Hipometabolism maps and Bars Charts)
