@@ -520,8 +520,8 @@ if __name__ == '__main__':
             path_normalized_MRI_image = path_normalized_MRI_flirt_imag
             if freesurfer:
                 path_normalized_aseg_segmentation = path_normalized_segmentation_flirt_image
-    else:
-        exit("No Normalized Image")
+        else:
+            exit("No Normalized Image")
 
 
 
