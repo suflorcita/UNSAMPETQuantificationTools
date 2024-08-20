@@ -251,8 +251,8 @@ if __name__ == '__main__':
             path_PET_final = path_ANT_image + "Warped.nii.gz"
 
     else:
+        subject_dir = os.path.join(output_path, "Freesurfer")
         if freesurfer:
-            subject_dir = output_path + "/Freesurfer"
             if not os.path.exists(subject_dir):
                 os.mkdir(subject_dir)
 
@@ -260,10 +260,7 @@ if __name__ == '__main__':
 
                 subprocess.run([recon_all_command], shell=True)
 
-
-
-
-        path_T1_FS_mgz = subject_dir + "/" + subject + "/mri/T1.mgz"
+        path_T1_FS_mgz = os.path.join(subject_dir, subject, "mri", "T1.mgz")
 
         if os.path.exists(path_T1_FS_mgz):
             print("FS: ok. T1 is FS T1.mgz")
@@ -540,7 +537,9 @@ if __name__ == '__main__':
 
     # Quantification Using Hammers atlas
     image_Hammers = sitk.ReadImage(path_Hammers)
-    image_aseg_segmentation = sitk.ReadImage(path_normalized_aseg_segmentation)
+    image_aseg_segmentation = None
+    if aseg:
+        image_aseg_segmentation = sitk.ReadImage(path_normalized_aseg_segmentation)
 
 
     df_subject_intensity, image_subject_intensity = quant.PET_FDG_quantification(image_PET, image_Hammers,
