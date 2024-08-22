@@ -2,15 +2,16 @@
 
 import processPET4D as reg
 import argparse
-import ImageRegistration as imreg
 import SimpleITK as sitk
 import subprocess
 import pandas as pd
 import PETquantification as quant
 import normalization as norm
-import sys
+import plots
 import os
 import shutil, math
+
+from normalization import Hammers_image
 
 if __name__ == '__main__':
     # Create the parser
@@ -533,7 +534,7 @@ if __name__ == '__main__':
 
 
     # Quantification FDG-PET in subject to process (Hammers atlas)
-    image_PET = sitk.ReadImage(path_normalized_PET_image)
+    image_subject_PET = sitk.ReadImage(path_normalized_PET_image)
 
     # Quantification Using Hammers atlas
     image_Hammers = sitk.ReadImage(path_Hammers)
@@ -542,13 +543,14 @@ if __name__ == '__main__':
         image_aseg_segmentation = sitk.ReadImage(path_normalized_aseg_segmentation)
 
 
-    df_subject_intensity, image_subject_intensity = quant.PET_FDG_quantification(image_PET, image_Hammers,
+    df_subject_intensity, image_subject_intensity = quant.PET_FDG_quantification(image_subject_PET, image_Hammers,
                                                                                  df_labels_Hammers,
                                                                                  second_segmentation=image_aseg_segmentation,
                                                                                  atlas="Hammers")
     df_subject_intensity.to_csv(os.path.join(path_CSV_files,"subject_intensity.csv"))
 
-    values_mean_activity_Hammers = df_subject_intensity["mean_PET"]
+    values_subject_mean_activity_Hammers = df_subject_intensity["mean_PET"]
+    n_label_subject_mean_activity_Hammers = df_subject_intensity["n_label"]
 
     name_structures_Hammers = df_subject_intensity["structure"] + '-' + df_subject_intensity["hemisphere"]
 
@@ -557,78 +559,147 @@ if __name__ == '__main__':
     cerebellum_name_Hammers = "cerebellum"
 
     # Extract cerebellum values
-    cerebellum_R = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name_Hammers)
+    cerebellum_R_subject = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name_Hammers)
                                                    & (df_subject_intensity['hemisphere'] == 'R')]['mean_PET']).iloc[0])
-    cerebellum_L = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name_Hammers)
+    cerebellum_L_subject = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name_Hammers)
                                                    & (df_subject_intensity['hemisphere'] == 'L')]['mean_PET']).iloc[0])
-    cerebellum = (cerebellum_R + cerebellum_L) / 2
+    cerebellum_subject = (cerebellum_R_subject + cerebellum_L_subject) / 2
 
-    print(f"Cerebellum: {cerebellum}")
-    norm_image_cerebellum = norm.intensity_normalization(image_PET, mode="scalar",
-                                                         scalar=cerebellum)
+
+    norm_subject_image_cerebellum = norm.intensity_normalization(image_subject_PET, mode="scalar",
+                                                                 scalar=cerebellum_subject)
+
 
     # Quantification Normalization Cerebellum
     df_subject_intensity_norm_cerebellum_Hammers, image_subject_intensity_norm_cerebellum = quant.PET_FDG_quantification(
-        norm_image_cerebellum, image_Hammers,
+        norm_subject_image_cerebellum, image_Hammers,
         df_labels_Hammers,
         second_segmentation=image_aseg_segmentation,
         atlas="Hammers")
 
-    values_normalization_cerebellum_hammers = df_subject_intensity_norm_cerebellum_Hammers["mean_PET"]
+    values_subject_normalization_cerebellum_hammers = df_subject_intensity_norm_cerebellum_Hammers["mean_PET"]
 
     output_normalization_cerebellum = os.path.join(path_normalization_images,
                                                    'intensity_normalization_cerebellum.nii.gz')
-    sitk.WriteImage(norm_image_cerebellum, output_normalization_cerebellum)
+    sitk.WriteImage(norm_subject_image_cerebellum, output_normalization_cerebellum)
 
     ### Normalized to mean value
-    norm_image_mean = norm.intensity_normalization(image_PET)
+    norm_subject_image_mean = norm.intensity_normalization(image_subject_PET)
     output_normalization_mean = os.path.join(path_normalization_images,
                                              'intensity_normalization_mean.nii.gz')
-    sitk.WriteImage(norm_image_mean, output_normalization_mean)
+    sitk.WriteImage(norm_subject_image_mean, output_normalization_mean)
 
     # Quantification Normalization mean Value
     df_subject_intensity_norm_mean_Hammers, image_subject_intensity_norm_mean = quant.PET_FDG_quantification(
-        norm_image_mean, image_Hammers,
+        norm_subject_image_mean, image_Hammers,
         df_labels_Hammers,
         second_segmentation=image_aseg_segmentation,
         atlas="Hammers")
 
-    values_normalization_mean = df_subject_intensity_norm_mean_Hammers["mean_PET"]
+    values_subject_normalization_mean = df_subject_intensity_norm_mean_Hammers["mean_PET"]
 
+    # Subject Intensity Normalization CSV
+    output_subject_csv_hammers = os.path.join(path_CSV_files, "subject_normalization_values_hammers.csv")
+
+
+    df_normalization_subject = pd.DataFrame({'Structure': name_structures_Hammers,
+                                             "n_label": n_label_subject_mean_activity_Hammers,
+                                     'Regional uptake mean values': values_subject_mean_activity_Hammers,
+                                     'Normalization to total brain mean value': values_subject_normalization_mean,
+                                     'Normalization to cerebellum uptake values': values_subject_normalization_cerebellum_hammers,
+                                             })
+    df_normalization_subject.to_csv(output_subject_csv_hammers)
 
     # Quantification FDG-PET in ATLAS MNI152
     MNI_152_PET_image = sitk.ReadImage(path_MNI_152_PET)
     df_MNI152_intensity, image_MNI152_intensity = quant.PET_FDG_quantification(MNI_152_PET_image,
                                                                                image_Hammers,
                                                                                df_labels_Hammers,
-                                                                               atlas="Hammers", normalization=True)
+                                                                               atlas="Hammers")
     df_MNI152_intensity.to_csv(os.path.join(path_CSV_files, "MNI152_intensity.csv"))
 
+    values_MNI152_mean_activity_Hammers = df_MNI152_intensity["mean_PET"]
+
+
+    # MNI152 Normalization to cerebellum
+    # Extract cerebellum values
+    cerebellum_R_MNI152 = float((df_MNI152_intensity.loc[(df_MNI152_intensity['structure'] == cerebellum_name_Hammers)
+                                                   & (df_MNI152_intensity['hemisphere'] == 'R')]['mean_PET']).iloc[0])
+    cerebellum_L_MNI152 = float((df_MNI152_intensity.loc[(df_MNI152_intensity['structure'] == cerebellum_name_Hammers)
+                                                   & (df_MNI152_intensity['hemisphere'] == 'L')]['mean_PET']).iloc[0])
+    cerebellum_MNI152 = (cerebellum_R_MNI152 + cerebellum_L_MNI152) / 2
+
+    norm_MNI152_image_cerebellum = norm.intensity_normalization(MNI_152_PET_image, mode="scalar",
+                                                         scalar=cerebellum_MNI152)
+
+    # Quantification Normalization Cerebellum in ATLAS MNI152
+    df_MNI152_intensity_norm_cerebellum_Hammers, image_MNI152_intensity_norm_cerebellum = quant.PET_FDG_quantification(
+        norm_MNI152_image_cerebellum, image_Hammers,
+        df_labels_Hammers,
+        second_segmentation=None,
+        atlas="Hammers")
+
+    values_MNI152_normalization_cerebellum_hammers = df_MNI152_intensity_norm_cerebellum_Hammers["mean_PET"]
+
+    ### Normalized to mean value
+    norm_MNI152_image_mean = norm.intensity_normalization(MNI_152_PET_image)
+
+    # Quantification Normalization mean Value
+    df_MNI152_intensity_norm_mean_Hammers, image_MNI152_intensity_norm_mean = quant.PET_FDG_quantification(
+        norm_MNI152_image_mean, image_Hammers,
+        df_labels_Hammers,
+        second_segmentation=None,
+        atlas="Hammers")
+
+    values_MNI152_normalization_mean = df_MNI152_intensity_norm_mean_Hammers["mean_PET"]
+
+    # MNI15Q Intensity Normalization CSV
+    output_MNI152_csv_hammers = os.path.join(path_CSV_files, "MNI152_normalization_values_hammers.csv")
+
+    df_normalization_MNI152 = pd.DataFrame({'Structure': name_structures_Hammers,
+                                            "n_label":n_label_subject_mean_activity_Hammers,
+                                     'Regional uptake mean values': values_MNI152_mean_activity_Hammers,
+                                     'Normalization to total brain mean value': values_MNI152_normalization_mean,
+                                     'Normalization to cerebellum uptake values': values_MNI152_normalization_cerebellum_hammers,
+                                             })
+    df_normalization_MNI152.to_csv(output_MNI152_csv_hammers)
+
+    # Generate Synthetic image
     path_synthetic_images = os.path.join(output_path,"Synthetic_Image")
 
     if not os.path.exists(path_synthetic_images):
         os.mkdir(path_synthetic_images)
 
-
     sitk.WriteImage(image_subject_intensity, os.path.join(path_synthetic_images , "synthetic_image_subject.nii.gz"))
     sitk.WriteImage(image_MNI152_intensity, os.path.join(path_synthetic_images , "synthetic_image_MNI152.nii.gz"))
 
+
     # Compare subject with Atlas MNI152 dataset
-    #image_diff, df_diff = quant.image_change(df_subject_intensity, df_MNI152_intensity, path_Hammers)
-    #df_diff.to_csv(os.path.join(path_CSV_files, "Intensity_image_changes.csv"))
-    #sitk.WriteImage(image_diff, os.path.join(path_synthetic_images, "synthetic_image_changes.nii.gz"))
+    image_diff_cerebellum, df_diff_cerebellum = quant.image_change(df_normalization_subject,
+                                                                   df_normalization_MNI152,
+                                                                   image_Hammers,
+                                                                   mode="cerebellum")
 
-    # Intensity Normalization
-    output_csv_hammers = os.path.join(path_CSV_files, "normalization_values_hammers.csv")
+    image_diff_mean, df_diff_mean = quant.image_change(df_normalization_subject,
+                                                                   df_normalization_MNI152,
+                                                                   image_Hammers,
+                                                                   mode="mean")
+    # Images
+    path_synthetic_image_norm_cerebellum = os.path.join(path_synthetic_images, "synthetic_cerebellum_image_changes.nii.gz")
+    path_synthetic_image_norm_mean = os.path.join(path_synthetic_images, "synthetic_mean_image_changes.nii.gz")
 
-    df_normalization = pd.DataFrame({'Structure': name_structures_Hammers,
-                                     'Regional uptake mean values': values_mean_activity_Hammers,
-                                     'Normalization to total brain mean value': values_normalization_mean,
-                                     'Normalization to cerebellum uptake values': values_normalization_cerebellum_hammers,
-                                     })
-    df_normalization.to_csv(output_csv_hammers)
+    sitk.WriteImage(image_diff_cerebellum, path_synthetic_image_norm_cerebellum)
+    sitk.WriteImage(image_diff_mean, path_synthetic_image_norm_mean)
 
+    # CSV
+    change_values_normalized_cerebellum = df_diff_cerebellum["change"]
+    change_values_normalized_mean = df_diff_mean["change"]
+    df_changes = pd.DataFrame({'Structure': name_structures_Hammers,
+                                            'Change between images normalized to cerebellum': change_values_normalized_cerebellum,
+                                            'Change between images normalized to mean uptake values': change_values_normalized_mean,
+                                            })
 
+    df_changes.to_csv(os.path.join(path_CSV_files, "Intensity_image_changes.csv"))
 
     if freesurfer:
         output_synthetic_image_Destrieux = os.path.join(path_synthetic_images, "synthetic_image_subject_Destrieux.nii.gz")
@@ -801,16 +872,18 @@ if __name__ == '__main__':
     shutil.copy2(path_normalized_PET_image, path_final_PET_normalized_image)
 
     # Copy CSV, Registered and Normalized image
-    shutil.copytree(path_CSV_files,path_CSV_final_dir)
-    shutil.copytree(path_normalization_images, path_Normalized_final_dir)
-    shutil.copytree(path_PET_registration_dir,path_Registration_final_dir)
-
-    # Normalized PET image
-
+    shutil.copytree(path_CSV_files,path_CSV_final_dir, dirs_exist_ok=True)
+    shutil.copytree(path_normalization_images, path_Normalized_final_dir, dirs_exist_ok=True)
+    shutil.copytree(path_PET_registration_dir,path_Registration_final_dir,dirs_exist_ok=True)
 
     # Basic Data Analysis (Hipometabolism maps and Bars Charts)
-    # Bar charts
-    path_chart = output_path + "/charts"
+    path_plots = os.path.join(output_path, "Plots")
 
-    if not os.path.exists(path_chart):
-        os.mkdir(path_chart)
+    if not os.path.exists(path_plots):
+        os.mkdir(path_plots)
+
+    # Hypometabolism Maps
+    output_hypometabolism_map = os.path.join(path_plots, "Hypometabolism_maps.nii.gz")
+    plots.plot_hypometabolism_maps(Hammers_image, path_normalized_MRI_image, output_path, coord=(-3, -40, 15))
+
+    # Bar charts
