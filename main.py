@@ -23,6 +23,8 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--output", help='Name of output dir')  # Output path
     parser.add_argument("-s", "--subjet", help='Name of subject')  # Subject name
     parser.add_argument("-t", "--pet-template", help='PET template in case there is no MRI image')
+    parser.add_argument("-f", "--freesurfer-dir", help='path of Freesurfer files')
+
     # Add the --no-flirt argument
     parser.add_argument(
         '--no-flirt',
@@ -63,6 +65,7 @@ if __name__ == '__main__':
     path_MRI_image = args.mri
     subject = args.subjet
     output_path = args.output
+    freesurfer_dir = args.freesurfer_dir
 
     freesurfer = args.freesurfer
 
@@ -89,8 +92,8 @@ if __name__ == '__main__':
     if output_path == None:
         output_path = os.path.join(script_dir,  "./anonymous")
 
-    if not os.path.exists(output_path):
-        os.mkdir(output_path)
+    if freesurfer_dir == None:
+        freesurfer_dir = ""
 
     # Path ATLAS
 
@@ -252,16 +255,20 @@ if __name__ == '__main__':
             path_PET_final = path_ANT_image + "Warped.nii.gz"
 
     else:
-        subject_dir = os.path.join(output_path, "Freesurfer")
+        #freesurfer_dir = os.path.join(output_path, "Freesurfer")
         if freesurfer:
-            if not os.path.exists(subject_dir):
-                os.mkdir(subject_dir)
+            if not freesurfer_dir:
+                freesurfer_dir = os.path.join(output_path, "Freesurfer")
+                if not os.path.exists(freesurfer_dir):
+                    os.mkdir(freesurfer_dir)
 
-                recon_all_command = f"recon-all -s {subject} -i {path_MRI_image} -sd {subject_dir} -all -parallel -openmp 16"
+                recon_all_command = f"recon-all -s {subject} -i {path_MRI_image} -sd {freesurfer_dir} -all -parallel -openmp 16"
 
                 subprocess.run([recon_all_command], shell=True)
+                freesurfer_dir = os.path.join(freesurfer_dir, subject)
 
-        path_T1_FS_mgz = os.path.join(subject_dir, subject, "mri", "T1.mgz")
+        path_T1_FS_mgz = os.path.join(freesurfer_dir, "mri", "T1.mgz")
+        print(path_T1_FS_mgz)
 
         if os.path.exists(path_T1_FS_mgz):
             print("FS: ok. T1 is FS T1.mgz")
@@ -269,20 +276,21 @@ if __name__ == '__main__':
             mri_convert_t1_FS = f"mri_convert {path_T1_FS_mgz} {path_T1}"
             subprocess.run([mri_convert_t1_FS], shell=True)
 
-            path_T1_brain_mgz = subject_dir + "/" + subject + "/mri/brainmask.mgz"
+            path_T1_brain_mgz = os.path.join(freesurfer_dir, "mri", "brainmask.mgz")
+
             path_T1_brain = output_path + "/T1_FS_onlybrain.nii"
             mri_convert_t1_only_brain = f"mri_convert {path_T1_brain_mgz} {path_T1_brain}"
             subprocess.run([mri_convert_t1_only_brain], shell=True)
 
             # Segmentation
             aseg = True
-            path_segmentation_mgz = subject_dir + "/" + subject + "/mri/aseg.mgz"
+            path_segmentation_mgz = os.path.join(freesurfer_dir, "mri","aseg.mgz")
             path_segmentation = output_path + "/aseg.nii"
             mri_convert_segmentation = f"mri_convert {path_segmentation_mgz} {path_segmentation}"
             subprocess.run([mri_convert_segmentation], shell=True)
 
             # Parcellation
-            path_aparc_mgz = os.path.join(output_path, "Freesurfer/" + subject + "/mri/aparc+aseg.mgz")
+            path_aparc_mgz = os.path.join(freesurfer_dir, "/mri/aparc+aseg.mgz")
             path_aparc = os.path.join(output_path, "aparc+aseg.nii")
 
             # MRI convert: DKT atlas
@@ -291,8 +299,8 @@ if __name__ == '__main__':
                 subprocess.run([mri_convert_parcellation], shell=True)
 
             # MRI convert: Destrieux atlas
-            path_aparc_destrieux_mgz = os.path.join(output_path, "Freesurfer/" + subject + "/mri/aparc.a2009s+aseg.mgz")
-            path_aparc_destrieux = os.path.join(output_path, "aparc.a2009s+aseg.nii")
+            path_aparc_destrieux_mgz =  os.path.join(freesurfer_dir, "mri","aparc.a2009s+aseg.mgz")
+            path_aparc_destrieux = os.path.join(freesurfer_dir, "aparc.a2009s+aseg.nii")
 
             mri_convert_parcellation_destrieux = f"mri_convert {path_aparc_destrieux_mgz} {path_aparc_destrieux}"
 
@@ -446,7 +454,6 @@ if __name__ == '__main__':
                     path_ANT_input_aseg = path_segmentation
                 else:
                     path_ANT_input_aseg = path_FLIRT_segmentation
-
 
 
             # Install ANTs and set environment variables in antsRegistrationSyNQuick.sh script
