@@ -535,6 +535,7 @@ if __name__ == '__main__':
 
     # Quantification FDG-PET in subject to process (Hammers atlas)
     image_subject_PET = sitk.ReadImage(path_normalized_PET_image)
+    image_subject_MRI = sitk.ReadImage(path_normalized_MRI_image)
 
     # Quantification Using Hammers atlas
     image_Hammers = sitk.ReadImage(path_Hammers)
@@ -653,7 +654,7 @@ if __name__ == '__main__':
 
     values_MNI152_normalization_mean = df_MNI152_intensity_norm_mean_Hammers["mean_PET"]
 
-    # MNI15Q Intensity Normalization CSV
+    # MNI152 Intensity Normalization CSV
     output_MNI152_csv_hammers = os.path.join(path_CSV_files, "MNI152_normalization_values_hammers.csv")
 
     df_normalization_MNI152 = pd.DataFrame({'Structure': name_structures_Hammers,
@@ -883,7 +884,18 @@ if __name__ == '__main__':
         os.mkdir(path_plots)
 
     # Hypometabolism Maps
-    output_hypometabolism_map = os.path.join(path_plots, "Hypometabolism_maps.nii.gz")
-    plots.plot_hypometabolism_maps(Hammers_image, path_normalized_MRI_image, output_path, coord=(-3, -40, 15))
-
-    # Bar charts
+    # output_hypometabolism_map_cerebellum = os.path.join(path_plots, "Hypometabolism_maps_cerebellum.png")
+    # output_hypometabolism_map_mean = os.path.join(path_plots, "Hypometabolism_maps_mean.png")
+    #
+    # plots.plot_hypometabolism_maps(path_synthetic_image_norm_cerebellum, path_normalized_MRI_image, output_path, output_hypometabolism_map_cerebellum, coord=(-3, -40, 15))
+    # plots.plot_hypometabolism_maps(path_synthetic_image_norm_mean, path_normalized_MRI_image, output_path, output_hypometabolism_map_mean,
+    #                                coord=(-3, -40, 15))
+    #
+    # # Bar charts
+    # output_plot_cerebellum_top_ten = os.path.join(path_plots, f"{subject}_top_ten_cerebellum.png")
+    # output_plot_mean_top_ten = os.path.join(path_plots, f"{subject}_top_ten_mean.png")
+    #
+    # plots.plot_top_ten_regions(df_changes, df_normalization_subject, df_normalization_MNI152,
+    #                            output_plot_cerebellum_top_ten, mode="cerebellum")
+    # plots.plot_top_ten_regions(df_changes, df_normalization_subject, df_normalization_MNI152,
+    #                            output_plot_mean_top_ten)
