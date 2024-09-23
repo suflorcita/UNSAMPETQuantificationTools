@@ -9,9 +9,11 @@ import ImageRegistration as reg
 def copy_information_4d_3d(image4d, image3d):
     spacing_4d = image4d.GetSpacing()
     origin_4d = image4d.GetOrigin()
-
+    direction_4d = image4d.GetDirection()
+    direction_3d = [direction_4d[i] for i in (0, 1, 2, 4, 5, 6, 8, 9, 10)]
     image3d.SetSpacing(spacing_4d[:])
     image3d.SetOrigin(origin_4d)
+    image3d.SetDirection(direction_3d)
 
     return image3d
 
