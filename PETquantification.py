@@ -309,7 +309,7 @@ def PET_FDG_quantification(brain_image, brain_segmentation,
     return new_df, new_image
 
 
-def image_change(df_subject, df_atlas, path_segmented_brain, path_second_segmentation=None):
+def image_change(df_subject, df_atlas, segmented_brain, mode="Mean"):
     """
     Generates a dataframe with the percentage change per area, comparing the image with an atlas,
     and a synthetic image with the corresponding percentage change.
@@ -335,13 +335,6 @@ def image_change(df_subject, df_atlas, path_segmented_brain, path_second_segment
     # create df
     new_df = pd.DataFrame()
 
-    # second image cerebellum
-    if path_second_segmentation:
-        brain_segmentation2 = sitk.ReadImage(path_second_segmentation)
-        array_segmentation2 = sitk.GetArrayFromImage(path_second_segmentation)
-
-    segmented_brain = sitk.ReadImage(path_segmented_brain)
-
     # Get numpy array:
     array_segmented_brain = sitk.GetArrayFromImage(segmented_brain)
 
@@ -353,37 +346,24 @@ def image_change(df_subject, df_atlas, path_segmented_brain, path_second_segment
 
     for label in labels:
 
-        intensity_subject = float((df_subject.loc[df_subject["n_label"] == label]["normalization_cerebellum"]).iloc[0])
-        intensity_atlas = float((df_atlas.loc[df_atlas["n_label"] == label]["normalization_cerebellum"]).iloc[0])
+        if mode == "cerebellum":
+            name_column = "Normalization to cerebellum uptake values"
+        elif mode == "mean":
+            name_column = "Normalization to total brain mean value"
+
+        intensity_subject = float((df_subject.loc[df_subject["n_label"] == label][name_column]).iloc[0])
+        intensity_atlas = float((df_atlas.loc[df_atlas["n_label"] == label][name_column]).iloc[0])
 
         # structure
-        structure = str(df_subject.loc[df_subject["n_label"] == label]["structure"].values)[2:-2]
+        structure = str(df_subject.loc[df_subject["n_label"] == label]["Structure"].values)[2:-2]
 
         # hemispheres
-        hemisphere = str(df_subject.loc[df_subject["n_label"] == label]["hemisphere"].values)[2:-2]
+        # hemisphere = str(df_subject.loc[df_subject["n_label"] == label]["hemisphere"].values)[2:-2]
 
         change = ((intensity_subject - intensity_atlas) / intensity_atlas) * 100
 
         if label == 0:
             change = 0
-
-        # change mask for left and right cerebellum
-        # right
-        if path_second_segmentation and label == 17:
-            mask_right_cerebellum = array_segmentation2 == 47
-
-            # create new image
-            new_image[mask_right_cerebellum] = change
-            continue
-
-        # left
-        if path_second_segmentation and label == 18:
-            # mask
-            mask_left_cerebellum = array_segmentation2 == 8
-
-            # create new image
-            new_image[mask_left_cerebellum] = change
-            continue
 
         # create mask
         mask_label = array_segmented_brain == label
@@ -391,7 +371,9 @@ def image_change(df_subject, df_atlas, path_segmented_brain, path_second_segment
         new_image[mask_label] = change
 
         # append new row to df
-        row = pd.Series({'n_label': int(label), 'cambio': change, 'structure': structure, 'hemisphere': hemisphere})
+        row = pd.Series({'n_label': int(label), 'change': change, 'structure': structure})
+
+        # , 'hemisphere': hemisphere
         new_df = pd.concat([new_df, row.to_frame().T], ignore_index=True)
 
     new_image = sitk.GetImageFromArray(new_image)
