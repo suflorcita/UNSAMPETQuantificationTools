@@ -41,34 +41,34 @@ PETQuantification [-h] [-m MRI] [-p PET] [-o OUTPUT] [-s SUBJECT]
                   [-t PET_TEMPLATE] [-f FREESURFER_DIR] [--no-flirt]
                   [--no-ant] [--no-freesurfer]
 ```
-# Options
+### **Options:**
 
--h, --help
-Show the help message and exit.
+- `-h, --help`  
+  Show the help message and exit.
+  
+- `-m MRI, --mri MRI`  
+  Path to the MRI image. Use this flag if you have an MRI image.
 
--m MRI, --mri MRI
-Path to the MRI image. Use this flag if you have an MRI image.
+- `-p PET, --pet PET`  
+  Path to the PET image (required).
 
--p PET, --pet PET
-Path to the PET image (required).
+- `-o OUTPUT, --output OUTPUT`  
+  Name of the output directory where processed data will be saved.
 
--o OUTPUT, --output OUTPUT
-Name of the output directory where processed data will be saved.
+- `-s SUBJECT, --subject SUBJECT`  
+  Name of the subject being processed.
 
--s SUBJECT, --subject SUBJECT
-Name of the subject being processed.
+- `-t PET_TEMPLATE, --pet-template PET_TEMPLATE`  
+  PET template to be used when no MRI image is provided.
 
--t PET_TEMPLATE, --pet-template PET_TEMPLATE
-PET template to be used when no MRI image is provided.
+- `-f FREESURFER_DIR, --freesurfer-dir FREESURFER_DIR`  
+  Path to the FreeSurfer directory (required for FreeSurfer-based processing).
 
--f FREESURFER_DIR, --freesurfer-dir FREESURFER_DIR
-Path to the FreeSurfer directory (required for FreeSurfer-based processing).
+- `--no-flirt`  
+  Disable the FLIRT command. Use this flag to skip the FLIRT registration process.
 
---no-flirt
-Disable the FLIRT command. Use this flag to skip the FLIRT registration process.
+- `--no-ant`  
+  Disable the ANTs command. Use this flag to skip the ANTs registration process.
 
---no-ant
-Disable the ANTs command. Use this flag to skip the ANTs registration process.
-
---no-freesurfer
-Disable the FreeSurfer command. Use this flag to skip FreeSurfer-based processing.
+- `--no-freesurfer`  
+  Disable the FreeSurfer command. Use this flag to skip FreeSurfer-based
