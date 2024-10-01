@@ -111,6 +111,10 @@ if __name__ == '__main__':
     # Output
     output_path = os.path.join(output_path, subject)
 
+    # Use all disponible threads
+    os.environ["TF_NUM_INTRAOP_THREADS"] = str(os.cpu_count())
+    os.environ["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = str(os.cpu_count())
+
     # # If PET is a dir
     # if os.path.isdir(path_PET_image):
     #     output_fdg_path = os.path.join(output_path, "unique_fdg_pet_image.nii.gz")
@@ -197,9 +201,6 @@ if __name__ == '__main__':
 
                 # ANT
                 # Use 16 threads
-                subprocess.run(["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS=16"], shell=True)
-
-
                 ANT_path_registration = "antsRegistrationSyN.sh"
                 path_ANT_image = os.path.join(new_dir_PET_frame, "PETimage_template_ANT")
                 ANT_command = f"{ANT_path_registration} -d 3 -f {path_PET_template_CN} -m {path_PET_Template_Flirt} -o {path_ANT_image}"
