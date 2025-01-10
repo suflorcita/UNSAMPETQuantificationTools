@@ -291,7 +291,7 @@ if __name__ == '__main__':
             subprocess.run([mri_convert_segmentation], shell=True)
 
             # Parcellation
-            path_aparc_mgz = os.path.join(freesurfer_dir, "/mri/aparc+aseg.mgz")
+            path_aparc_mgz = os.path.join(freesurfer_dir, "mri", "aparc+aseg.mgz")
             path_aparc = os.path.join(output_path, "aparc+aseg.nii")
 
             # MRI convert: DKT atlas
@@ -506,15 +506,15 @@ if __name__ == '__main__':
     df_labels_FS = pd.read_csv(labels_FS_csv_path)
     df_labels_Hammers = pd.read_csv(labels_Hammers_csv_path)
 
+    path_normalized_PET_flirt_image = os.path.join(output_path, "FLIRT", "PET_Norm_MNI_152_FLIRT.nii.gz")
+    path_normalized_segmentation_flirt_image = os.path.join(output_path, "FLIRT", "aseg_Norm_MNI_152_FLIRT.nii.gz")
+    path_normalized_MRI_flirt_imag = os.path.join(output_path, "FLIRT", "T1_brain_MNI_152_FLIRT.nii.gz")
+
+    path_normalized_PET_ant_image = os.path.join(output_path, "ANTs", "PET_Norm_MNI_152_ANT.nii.gz")
+    path_normalized_segmentation_ant_image = os.path.join(output_path, "ANTs", "Aseg_Norm_MNI_152_ANT.nii.gz")
+    path_normalized_MRI_ant_image = os.path.join(output_path, "ANTs", "T1_Norm_MNI_152_ANTWarped.nii.gz")
+
     if not args.ants and not args.flirt:
-        path_normalized_PET_flirt_image = os.path.join(output_path, "FLIRT", "PET_Norm_MNI_152_FLIRT.nii.gz")
-        path_normalized_segmentation_flirt_image = os.path.join(output_path, "FLIRT", "aseg_Norm_MNI_152_FLIRT.nii.gz")
-        path_normalized_MRI_flirt_imag = os.path.join(output_path, "FLIRT", "T1_brain_MNI_152_FLIRT.nii.gz")
-
-        path_normalized_PET_ant_image = os.path.join(output_path, "ANTs", "PET_Norm_MNI_152_ANT.nii.gz")
-        path_normalized_segmentation_ant_image = os.path.join(output_path, "ANTs", "Aseg_Norm_MNI_152_ANT.nii.gz")
-        path_normalized_MRI_ant_image = os.path.join(output_path, "ANTs","T1_Norm_MNI_152_ANTWarped.nii.gz")
-
         if os.path.exists(path_normalized_PET_ant_image):
             path_normalized_PET_image = path_normalized_PET_ant_image
             path_normalized_MRI_image = path_normalized_MRI_ant_image
@@ -528,6 +528,7 @@ if __name__ == '__main__':
                 path_normalized_aseg_segmentation = path_normalized_segmentation_flirt_image
         else:
             exit("No Normalized Image")
+
 
 
 
