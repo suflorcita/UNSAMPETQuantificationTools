@@ -440,7 +440,7 @@ if __name__ == '__main__':
         if args.ants:
             # T1
             if path_flirt_MRI == None:
-                path_ANT_input_t1 = path_T1
+                path_ANT_input_t1 = path_T1_brain
             else:
                 path_ANT_input_t1 = path_flirt_MRI
 
