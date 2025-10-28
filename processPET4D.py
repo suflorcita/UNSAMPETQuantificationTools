@@ -32,50 +32,66 @@ def image4D_to_3D(image_4D):
     return images_3D
 
 
-def register_PET_MRI(PET_image, MRI_image):
+def register_and_sum_pet_images(PET_images):
+    """
+    Register all PET frames rigidly to the first one
+    and return the aligned frames plus their summed 3D image.
+    """
 
-    # If 4D Convert PET 4D image in multiple 3D image
-    if os.path.isdir(PET_image):
-        PET_images = []
-        images = os.listdir(PET_image)
-
-        for image in images:
-            path_image = PET_image + "/" + image
-            image_pet = sitk.ReadImage(path_image)
-            image_pet = sitk.Cast(image_pet, sitk.sitkFloat32)  # cast
-            PET_images.append(image_pet)
-    else:
-        image = sitk.ReadImage(PET_image)
-        if len(image.GetSize()) == 4:
-            PET_images = image4D_to_3D(image)
-        else:
-            PET_images = [image]
-
-
-    # Read MRI image
-    MRI_image = sitk.ReadImage(MRI_image)
-    MRI_image = sitk.Cast(MRI_image, sitk.sitkFloat32)
-
-    # # Register PET images between them and sum them:
-    # Registration between frames
+    # Use the first PET frame as reference
     reference_PET_image = PET_images[0]
+
+    # Rigidly register all other frames to the reference
     for i in range(1, len(PET_images)):
         resultReg = reg.RigidImageRegistration(PET_images[i], reference_PET_image, printLog=True)
         PET_images[i] = resultReg['image']
 
-    # Compute the sum of PET images
+    # Initialize an empty image with the same metadata as the reference
     sum_pet_3d_image = sitk.Image(reference_PET_image.GetSize(), reference_PET_image.GetPixelID())
     sum_pet_3d_image.CopyInformation(reference_PET_image)
 
+    # Add all registered frames to obtain one single PET image
     for image in PET_images:
         sum_pet_3d_image = sitk.Add(sum_pet_3d_image, image)
 
-    # Register to t1 using the sum
-    result_registration = reg.RigidImageRegistration(sum_pet_3d_image, MRI_image, printLog=True)
+    return sum_pet_3d_image, PET_images
 
+
+def register_PET_MRI(PET_image, MRI_image):
+    """
+    Main function to register PET to MRI.
+    - Loads PET (directory, 4D or 3D)
+    - Registers PET frames to each other and sums them
+    - Registers the summed PET to the MRI
+    - Returns: individual frames, summed PET, registered PET, and transformation
+    """
+
+    # --- Load PET ---
+    if os.path.isdir(PET_image):
+        PET_images = []
+        for image in os.listdir(PET_image):
+            path_image = os.path.join(PET_image, image)
+            img = sitk.ReadImage(path_image)
+            img = sitk.Cast(img, sitk.sitkFloat32)
+            PET_images.append(img)
+    else:
+        image = sitk.ReadImage(PET_image)
+        if len(image.GetSize()) == 4:  # PET is 4D
+            PET_images = image4D_to_3D(image)
+        else:  # PET is already 3D
+            PET_images = [image]
+
+    # --- Load MRI ---
+    MRI_image = sitk.ReadImage(MRI_image)
+    MRI_image = sitk.Cast(MRI_image, sitk.sitkFloat32)
+
+    # --- Register and sum PET frames ---
+    sum_pet_3d_image, PET_images = register_and_sum_pet_images(PET_images)
+
+    # --- Register summed PET to MRI ---
+    result_registration = reg.RigidImageRegistration(sum_pet_3d_image, MRI_image, printLog=True)
     register_pet_t1 = result_registration["image"]
     txPET2MRI = result_registration["tx"]
-
 
     return PET_images, sum_pet_3d_image, register_pet_t1, txPET2MRI
 

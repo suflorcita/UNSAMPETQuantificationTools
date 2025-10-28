@@ -10,6 +10,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 path_MNI_152_T1_brain = os.path.join(script_dir, 'data', 'atlas', 'MNI152_T1_1mm_brain.nii.gz')
 label_Hammers_right_cerebellum = 17
 label_Hammers_left_cerebellum = 18
+label_dkt_cerebellum = 4
 aseg_right_cerebellum = 47
 aseg_left_cerebellum = 8
 
@@ -167,7 +168,7 @@ def resample_sitk(input_image, reference_image):
 
 
 def PET_FDG_quantification(brain_image, brain_segmentation,
-                           name_labels, atlas="Hammers", second_segmentation=False, normalization=None,
+                           name_labels, atlas="Hammers", second_segmentation=None, normalization=None,
                            normalization_mean=False, mask_only_brain=MNI_152_T1_brain_sitk):
     """
     Generates a dataframe with signal intensity per area and
@@ -189,7 +190,7 @@ def PET_FDG_quantification(brain_image, brain_segmentation,
             Name:
     atlas : str, optional
         Atlas used for the segmentation (default is "Hammers").
-    path_second_segmentation : str, optional
+    second_segmentation : sitk object
         Path to a FreeSurfer aseg segmentation (default is None).
     normalization : boolean, optional
         Specifies whether to perform normalization with cerebellum values.
@@ -230,6 +231,8 @@ def PET_FDG_quantification(brain_image, brain_segmentation,
 
     for i, label in enumerate(labels):
 
+        hemisphere = ''
+
         # match label with name of structure
         label_row = name_labels.loc[name_labels['n_label'] == label]  # find row with label in csv
         structure_name = str(label_row['structure'].values)[2:-2]  # match with the structure name
@@ -242,10 +245,21 @@ def PET_FDG_quantification(brain_image, brain_segmentation,
                 hemisphere = structure_name[-1]
                 structure_name = "-".join(structure_name[:-1])
             else:
-                hemisphere = ""
                 structure_name = "-".join(structure_name)
+        elif atlas == "CerebrA":
+            # split structure name
+            structure_name = structure_name.split("_")
 
-        elif atlas == "DKT":
+            if structure_name[-1] in ["lh", "rh"]:
+                if structure_name[-1] == "lh":
+                    hemisphere = "L"
+                else:
+                    hemisphere = "R"
+
+                structure_name = "-".join(structure_name[:-1])
+            else:
+                structure_name = "-".join(structure_name)
+        elif atlas == "FS":
             # split structure name
             structure_name = structure_name.split("-")
 
@@ -269,7 +283,6 @@ def PET_FDG_quantification(brain_image, brain_segmentation,
 
             else:
                 structure_name = "-".join(structure_name)
-                hemisphere = ""
 
         mask_label = array_segmentation == label  # create a mask
 
@@ -282,27 +295,32 @@ def PET_FDG_quantification(brain_image, brain_segmentation,
             mask_label = array_segmentation2 == aseg_left_cerebellum
 
         # signal intensity
-        mean = np.mean(array_brain[mask_label])
+        mean_uptake = np.mean(array_brain[mask_label])
 
         # copy signal intensty in new image
-        new_image[mask_label] = mean
+        new_image[mask_label] = mean_uptake
 
-        # append new row to df
-        row = pd.Series(
-            {'n_label': int(label), 'mean_PET': mean, 'structure': structure_name, 'hemisphere': hemisphere})
-        new_df = pd.concat([new_df, row.to_frame().T], ignore_index=True)
-
-    # Normalization cerebellum
-    if normalization:
-        new_df = intensity_cerebellum_normalization(new_df, atlas)
-
-    # Normalization mean total value
-    if normalization_mean:
-        if atlas == "Hammers":
-            array_brain_not_resample = sitk.GetArrayFromImage(brain_image_not_resample)
-            new_df = intensity_mean_total(new_df, array_brain_not_resample, mask_only_brain)
+        if not atlas == "DKT":
+            # append new row to df
+            row = pd.Series(
+                {'n_label': int(label), 'mean_PET': mean_uptake, 'structure': structure_name, 'hemisphere': hemisphere})
+            new_df = pd.concat([new_df, row.to_frame().T], ignore_index=True)
         else:
-            new_df = intensity_mean_total(new_df, array_brain, mask_only_brain)
+            # append new row to df
+            row = pd.Series(
+                {'n_label': int(label), 'mean_PET': mean_uptake, 'structure': structure_name})
+            new_df = pd.concat([new_df, row.to_frame().T], ignore_index=True)
+    # # Normalization cerebellum
+    # if normalization:
+    #     new_df = intensity_cerebellum_normalization(new_df, atlas)
+    #
+    # # Normalization mean total value
+    # if normalization_mean:
+    #     if atlas == "Hammers":
+    #         array_brain_not_resample = sitk.GetArrayFromImage(brain_image_not_resample)
+    #         new_df = intensity_mean_total(new_df, array_brain_not_resample, mask_only_brain)
+    #     else:
+    #         new_df = intensity_mean_total(new_df, array_brain, mask_only_brain)
 
     new_image = sitk.GetImageFromArray(new_image)
     new_image.CopyInformation(brain_segmentation)
