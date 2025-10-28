@@ -7,11 +7,10 @@ import subprocess
 import pandas as pd
 import PETquantification as quant
 import normalization as norm
-import plots
+import registration_tool as regtools
+# import plots
 import os
 import shutil, math
-
-from normalization import Hammers_image
 
 if __name__ == '__main__':
     # Create the parser
@@ -24,6 +23,8 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--subjet", help='Name of subject')  # Subject name
     parser.add_argument("-t", "--pet-template", help='PET template in case there is no MRI image')
     parser.add_argument("-f", "--freesurfer-dir", help='path of Freesurfer files')
+    parser.add_argument("-a", "--atlas", help='Atlas for quantification. Default: Hammers')
+
 
     # Add the --no-flirt argument
     parser.add_argument(
@@ -67,8 +68,11 @@ if __name__ == '__main__':
     subject = args.subjet
     output_path = args.output
     freesurfer_dir = args.freesurfer_dir
+    atlas = args.atlas
 
     freesurfer = args.freesurfer
+
+
 
     # Get the directory where the script is located
     # Check if the current file is a symbolic link
@@ -96,21 +100,47 @@ if __name__ == '__main__':
     if freesurfer_dir == None:
         freesurfer_dir = ""
 
-        # Path ATLAS
+    if atlas == None:
+        atlas = "Hammers"
+
+
+
+    # Path ATLAS
 
     path_MNI_152_T1 = os.path.join(script_dir, 'data', 'atlas', 'MNI152_T1_1mm.nii.gz')
     path_MNI_152_T1_brain = os.path.join(script_dir, 'data', 'atlas', 'MNI152_T1_1mm_brain.nii.gz')
     path_MNI_152_PET = os.path.join(script_dir, 'data', 'atlas', "MNI152_PET_1mm.nii")
     path_Hammers = os.path.join(script_dir, 'data', 'atlas', "Hammers_mith-n30r95-MaxProbMap-gm-MNI152-SPM12.nii.gz")
+    path_DKT = os.path.join(script_dir, 'data', 'atlas', "Desikan_Killiany_MNI_SPM12.nii.gz")
+    path_CerebrA = os.path.join(script_dir, 'data', 'atlas', "CerebrA.nii")
     path_PET_template_CN =  os.path.join(script_dir, 'data', 'atlas',"ATLAS/AtlasPETFDG_FiltOutliers_CN.nii")
 
+    if atlas == "DKT":
+        path_atlas = path_DKT
+    elif atlas == "CerebrA":
+        path_atlas = path_CerebrA
+    else:
+        path_atlas = path_Hammers
 
     # labels segmentation
-    labels_FS_csv_path =  os.path.join(script_dir, "Labels/FS_labels.csv")
-    labels_Hammers_csv_path =  os.path.join(script_dir, "Labels/labels_Hammers.csv")
+    path_labels_FS_csv =  os.path.join(script_dir, 'data', 'labels', "labels_FS.csv")
+    path_labels_DKT_csv = os.path.join(script_dir,  'data', 'labels', "labels_DKT.csv")
+    path_labels_Hammers_csv = os.path.join(script_dir, 'data', 'labels', "labels_Hammers.csv")
+    path_labels_CerebrA_csv = os.path.join(script_dir, 'data', 'labels', "labels_CerebrA.csv")
+
+    if path_atlas == path_DKT:
+        path_labels = path_labels_DKT_csv
+    elif path_atlas == path_CerebrA:
+        path_labels = path_labels_CerebrA_csv
+    else:
+        path_labels = path_labels_Hammers_csv
+
 
     # Output
     output_path = os.path.join(output_path, subject)
+
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
 
     # Use all disponible threads
     os.environ["TF_NUM_INTRAOP_THREADS"] = str(os.cpu_count())
@@ -118,6 +148,7 @@ if __name__ == '__main__':
     path_ANT = "antsRegistrationSyN.sh"
     path_ANT_apply_transform = "antsApplyTransforms"
 
+    process_frames = False
 
 
     if path_PET_template is None:
@@ -125,27 +156,32 @@ if __name__ == '__main__':
         path_PET_template = path_MNI_152_PET
 
 
+    # If PET is a dir convert to an image 4D
+    if os.path.isdir(path_PET_image):
+        output_fdg_path = os.path.join(output_path, "unique_fdg_pet_image.nii.gz")
 
-    # # If PET is a dir
-    # if os.path.isdir(path_PET_image):
-    #     output_fdg_path = os.path.join(output_path, "unique_fdg_pet_image.nii.gz")
-    #     fdg_files = sorted(
-    #         [os.path.join(path_PET_image, f) for f in os.listdir(path_PET_image) if f.endswith('.nii') or f.endswith('.nii.gz')])
-    #
-    #     # Load each image and add to a list
-    #     pet_images = []
-    #     for fdg_file in fdg_files[:]:  # Take the first 4 images
-    #         pet_img = sitk.ReadImage(fdg_file)
-    #         pet_images.append(pet_img)
-    #
-    #     # Combine the images along a new dimension (creating a 4D image)
-    #     combined_fdg_image = sitk.JoinSeries(pet_images)
-    #
-    #     # Save the combined image
-    #     sitk.WriteImage(combined_fdg_image, output_fdg_path)
-    #
-    #     path_PET_image = output_fdg_path
+        # List all PET NIfTI files in the directory
+        fdg_files = sorted([
+            os.path.join(path_PET_image, f)
+            for f in os.listdir(path_PET_image)
+            if f.endswith('.nii') or f.endswith('.nii.gz')
+        ])
 
+        # If no PET files found
+        if len(fdg_files) == 0:
+            path_PET_image = None
+
+        # If only one PET file found, use it directly
+        elif len(fdg_files) == 1:
+            path_PET_image = fdg_files[0]
+
+        # If multiple PET files found, join them into a 4D image
+        else:
+            pet_images = [sitk.ReadImage(fdg_file) for fdg_file in fdg_files]
+            combined_fdg_image = sitk.JoinSeries(pet_images)
+            sitk.WriteImage(combined_fdg_image, output_fdg_path)
+            path_PET_image = output_fdg_path
+            process_frames = True
 
     path_PET_final = None
     path_normalized_MRI_image = None
@@ -154,151 +190,66 @@ if __name__ == '__main__':
     if not os.path.exists(output_path):
         os.mkdir(output_path)
 
-
     if not path_MRI_image:
         aseg = False
         freesurfer = False
 
-        # Copy Image to Processed dir
-        PET_image_processed_dir = os.path.join(output_path, "Raw_PET_image.nii.gz")
-        shutil.copy(path_PET_image, PET_image_processed_dir)
-
         PET_image = sitk.ReadImage(path_PET_image)
 
+        # --- PET 4D case: split, register & sum ---
         if len(PET_image.GetSize()) == 4:
-
-            # Creates FRAMES dir
-            frames_dir = os.path.join(output_path, "FRAMES")
-
-            if not os.path.exists(frames_dir):
-                os.mkdir(frames_dir)
-
+            # Split into frames
             PET_images = reg.image4D_to_3D(PET_image)
 
+            # Register frames among themselves and get summed PET
+            sum_pet_3d_image, PET_images = reg.register_and_sum_pet_images(PET_images)
 
+            # Save frames
+            frames_dir = os.path.join(output_path, "Frames")
+            os.makedirs(frames_dir, exist_ok=True)
+            for i, frame in enumerate(PET_images):
+                frame_path = os.path.join(frames_dir, f"PET_frame_{i}.nii.gz")
+                sitk.WriteImage(frame, frame_path)
 
-            for i, PET_image_frame in enumerate(PET_images):
-                new_dir_PET_frame = os.path.join(frames_dir, f"FRAME_{i}")
+            # Save summed PET
+            sum_path = os.path.join(output_path, "Summed_PET_image.nii.gz")
+            sitk.WriteImage(sum_pet_3d_image, sum_path)
 
-                if not os.path.exists(new_dir_PET_frame):
-                    os.mkdir(new_dir_PET_frame)
+            # Work with summed PET as main image
+            path_PET_image = sum_path
 
-                # Apply Gaussian Filter to PET Image
-                # Calculate the standard deviation for an FWHM of 6 mm
-                fwhm = 6.0
-                sigma = fwhm / (2 * math.sqrt(2 * math.log(2)))
+        # --- Run pipeline on summed PET ---
+        path_PET_final, path_normalized_PET_image, transform_files = regtools.pet_registration_pipeline(
+            path_PET_image=path_PET_image,
+            path_PET_template=path_PET_template,
+            output_path=output_path,
+            args=args,
+            path_ANT="antsRegistrationSyN.sh",
+            path_ANT_apply="antsApplyTransforms"
+        )
 
-                # Create Gaussian Filter
-                gaussian_filter = sitk.SmoothingRecursiveGaussianImageFilter()
+        # --- Ensure transforms exist even if pipeline skipped them ---
+        transform_files = regtools.ensure_transform_files(output_path, transform_files)
 
-                # Set the filter parameters
-                gaussian_filter.SetSigma(sigma)
+        # --- Normalize each frame ---
+        if process_frames == True:
 
-                # Apply the Gaussian filter to the input image
-                output_image = gaussian_filter.Execute(PET_image_frame)
+            # --- Apply the same transforms to each individual frame ---
+            frames_dir = os.path.join(output_path, "Frames")
+            frames_to_template_dir = os.path.join(output_path, "Frames_to_template")
+            os.makedirs(frames_to_template_dir, exist_ok=True)
 
-                # Save the output image
-                path_smoothed_image = os.path.join(new_dir_PET_frame, "Smoothed_PET_image.nii.gz")
-                sitk.WriteImage(output_image, path_smoothed_image)
-                PET_image_frame = path_smoothed_image
+            # Get all PET frame files (registered to the summed PET previously)
+            PET_frame_paths = [os.path.join(frames_dir, f) for f in os.listdir(frames_dir) if f.endswith(".nii.gz")]
 
-                # Normalize to Atlas PET
+            # Normalize each frame to the template
+            PET_frames_normalized = regtools.normalize_pet_frames_to_template(
+                PET_frames=PET_frame_paths,
+                path_PET_template=path_PET_template,
+                transform_files=transform_files,
+                output_dir=frames_to_template_dir
+            )
 
-                # FLIRT
-                path_PET_Template_Flirt = os.path.join(new_dir_PET_frame, "PETimage_template_flirt.nii.gz")
-                path_FLIRT_tx = os.path.join(new_dir_PET_frame, "PETimage_template_flirt.mat")
-                flirt_command = f"flirt -in {PET_image_frame} -ref {path_PET_template} -out {path_PET_Template_Flirt} -omat {path_FLIRT_tx} -interp trilinear -dof 12"
-                subprocess.run([flirt_command], shell=True)
-
-
-                # ANT
-                # Use 16 threads
-                path_ANT_image = os.path.join(new_dir_PET_frame, "PETimage_template_ANT")
-                ANT_command = f"{path_ANT} -d 3 -f {path_PET_template} -m {path_PET_Template_Flirt} -o {path_ANT_image}"
-                subprocess.run([ANT_command], shell=True)
-
-
-                print("ANTs:OK")
-
-                path_PET_final = path_ANT_image + "Warped.nii.gz"
-
-                print(path_PET_final)
-
-        else:
-            # Apply Gaussian Filter to PET Image
-            # Calculate the standard deviation for an FWHM of 6 mm
-            fwhm = 6.0
-            sigma = fwhm / (2 * math.sqrt(2 * math.log(2)))
-
-            # Create Gaussian Filter
-            gaussian_filter = sitk.SmoothingRecursiveGaussianImageFilter()
-
-            # Set the filter parameters
-            gaussian_filter.SetSigma(sigma)
-
-            # Apply the Gaussian filter to the input image
-            output_image = gaussian_filter.Execute(PET_image)
-
-            # Save the output image
-            path_smoothed_image = os.path.join(output_path, "Smoothed_PET_image.nii.gz")
-            sitk.WriteImage(output_image, path_smoothed_image)
-
-            path_PET_final = path_smoothed_image
-            path_smoothed_PET_to_Template_Flirt = None
-
-            # Normalize to Atlas PET
-            if args.flirt:
-
-                # FLIRT
-                path_smoothed_PET_to_Template_Flirt = os.path.join(output_path, "PET_smoothed_image_to_template_flirt.nii.gz")
-                path_FLIRT_PET_smoothed_to_template_tx = os.path.join(output_path, "PET_smoothed_image_to_template_flirt_TX.mat")
-
-                flirt_command = (f"flirt -in {path_smoothed_image} -ref {path_PET_template} -out {path_smoothed_PET_to_Template_Flirt} "
-                                 f"-omat {path_FLIRT_PET_smoothed_to_template_tx} -interp trilinear -dof 12")
-                subprocess.run([flirt_command], shell=True)
-
-                # Apply FLIRT tx to Raw PET image
-                path_PET_to_Template_Flirt = os.path.join(output_path, "PETimage_to_template_flirt.nii.gz")
-
-                flirt_apply_transform_PET_command = f"flirt -in {path_PET_image} -applyxfm -init {path_FLIRT_PET_smoothed_to_template_tx} " \
-                                                    f"-out {path_PET_to_Template_Flirt} " \
-                                                    f"-paddingsize 0.0 -interp trilinear -ref {path_PET_template}"
-                subprocess.run([flirt_apply_transform_PET_command], shell=True)
-
-
-                path_normalized_PET_image = path_PET_to_Template_Flirt
-
-
-            # ANT
-            if args.ants:
-
-                # PET
-                if path_smoothed_PET_to_Template_Flirt == None:
-                    path_ANT_input_PET_smoothed = path_smoothed_image
-                    path_ANT_input_PET = path_PET_image
-                else:
-                    path_ANT_input_PET_smoothed = path_smoothed_PET_to_Template_Flirt
-                    path_ANT_input_PET = path_PET_to_Template_Flirt
-
-                    path_smoothed_PET_to_Template_ANT = os.path.join(output_path, "PET_smoothed_image_to_template_ANT")
-
-                    ANT_command = f"{path_ANT} -d 3 -f {path_PET_template} -m {path_ANT_input_PET_smoothed} -o {path_smoothed_PET_to_Template_ANT}"
-                    subprocess.run([ANT_command], shell=True)
-
-                    # Apply ANT tx to Raw PET image
-                    path_ANT_transform1 = path_smoothed_PET_to_Template_ANT + "1Warp.nii.gz"
-                    path_ANT_transform2 = path_smoothed_PET_to_Template_ANT + "0GenericAffine.mat"
-
-                    # Apply ANT transform to PET
-                    path_PET_to_Template_ANT = os.path.join(output_path, "PET_image_to_template_ANT.nii.gz")
-
-                    ANT_transform_PET_command = f"{path_ANT_apply_transform} -d 3 -i {path_ANT_input_PET} " \
-                                                f"-r {path_PET_template} -o {path_PET_to_Template_ANT}  " \
-                                                f"-t {path_ANT_transform1} -t {path_ANT_transform2}"
-
-                    subprocess.run([ANT_transform_PET_command], shell=True)
-
-                    path_normalized_PET_image = path_PET_to_Template_ANT
 
     else:
         #freesurfer_dir = os.path.join(output_path, "Freesurfer")
@@ -546,105 +497,88 @@ if __name__ == '__main__':
 
 
     # Dataframe of name of labels
-    df_labels_FS = pd.read_csv(labels_FS_csv_path)
-    df_labels_Hammers = pd.read_csv(labels_Hammers_csv_path)
+    df_labels_FS = pd.read_csv(path_labels_FS_csv)
+    df_labels_atlas = pd.read_csv(path_labels)
 
-    path_normalized_segmentation_flirt_image = None
-    path_normalized_MRI_flirt_imag = None
-
-    path_normalized_segmentation_ant_image = None
-    path_normalized_MRI_ant_image = None
-
-
-    if path_MRI_image:
-        path_normalized_PET_flirt_image = os.path.join(output_path, "FLIRT", "PET_Norm_MNI_152_FLIRT.nii.gz")
-        path_normalized_segmentation_flirt_image = os.path.join(output_path, "FLIRT", "aseg_Norm_MNI_152_FLIRT.nii.gz")
-        path_normalized_MRI_flirt_imag = os.path.join(output_path, "FLIRT", "T1_brain_MNI_152_FLIRT.nii.gz")
-
-        path_normalized_PET_ant_image = os.path.join(output_path, "ANTs", "PET_Norm_MNI_152_ANT.nii.gz")
-        path_normalized_segmentation_ant_image = os.path.join(output_path, "ANTs", "Aseg_Norm_MNI_152_ANT.nii.gz")
-        path_normalized_MRI_ant_image = os.path.join(output_path, "ANTs", "T1_Norm_MNI_152_ANTWarped.nii.gz")
-
-
-        if not args.ants or not args.flirt:
-            if os.path.exists(path_normalized_PET_ant_image):
-                path_normalized_PET_image = path_normalized_PET_ant_image
-                path_normalized_MRI_image = path_normalized_MRI_ant_image
-                if freesurfer:
-                    path_normalized_aseg_segmentation = path_normalized_segmentation_ant_image
-
-            elif os.path.exists(path_normalized_PET_flirt_image):
-                path_normalized_PET_image = path_normalized_PET_flirt_image
-                path_normalized_MRI_image = path_normalized_MRI_flirt_imag
-
-                if freesurfer:
-                    path_normalized_aseg_segmentation = path_normalized_segmentation_flirt_image
-            else:
-                exit("No Normalized Image")
-    else:
-        path_normalized_PET_flirt_image = os.path.join(output_path, "PETimage_to_template_flirt.nii.gz")
-        path_normalized_PET_ant_image = os.path.join(output_path, "PET_image_to_template_ANT.nii.gz")
-
-        if not args.ants or not args.flirt:
-            if os.path.exists(path_normalized_PET_ant_image):
-                path_normalized_PET_image = path_normalized_PET_ant_image
-
-            elif os.path.exists(path_normalized_PET_flirt_image):
-                path_normalized_PET_image = path_normalized_PET_flirt_image
-
-            else:
-                exit("No Normalized Image")
+    # --- Ensure normalized PET (and MRI if exists) ---
+    normalized = regtools.ensure_normalized_image(
+        output_path=output_path,
+        path_MRI_image=path_MRI_image,
+        freesurfer=freesurfer,
+    )
 
 
 
-
+    path_normalized_PET_image = normalized["PET"]
+    path_normalized_MRI_image = normalized["MRI"]
+    path_normalized_aseg_segmentation = normalized["aseg"]
 
 
     path_CSV_files = os.path.join(output_path, "CSV")
+
     if not os.path.exists(path_CSV_files):
         os.mkdir(path_CSV_files)
 
-    path_normalization_images = os.path.join(output_path, "Normalization Images")
+    path_normalization_images = os.path.join(output_path, "Normalization")
+
     if not os.path.exists(path_normalization_images):
         os.mkdir(path_normalization_images)
 
 
-
-    # Quantification FDG-PET in subject to process (Hammers atlas)
+    # Quantification FDG-PET Using a Non FS atlas
     image_subject_PET = sitk.ReadImage(path_normalized_PET_image)
 
     if path_MRI_image:
         image_subject_MRI = sitk.ReadImage(path_normalized_MRI_image)
 
-    # Quantification Using Hammers atlas
-    image_Hammers = sitk.ReadImage(path_Hammers)
+
+    image_atlas = sitk.ReadImage(path_atlas)
     image_aseg_segmentation = None
 
     if aseg:
         image_aseg_segmentation = sitk.ReadImage(path_normalized_aseg_segmentation)
 
 
-    df_subject_intensity, image_subject_intensity = quant.PET_FDG_quantification(image_subject_PET, image_Hammers,
-                                                                                 df_labels_Hammers,
+    df_subject_intensity, image_subject_intensity = quant.PET_FDG_quantification(image_subject_PET, image_atlas,
+                                                                                 df_labels_atlas,
                                                                                  second_segmentation=image_aseg_segmentation,
-                                                                                 atlas="Hammers")
-    df_subject_intensity.to_csv(os.path.join(path_CSV_files,"subject_intensity.csv"))
+                                                                                 atlas=atlas)
 
-    values_subject_mean_activity_Hammers = df_subject_intensity["mean_PET"]
-    n_label_subject_mean_activity_Hammers = df_subject_intensity["n_label"]
 
-    name_structures_Hammers = df_subject_intensity["structure"] + '-' + df_subject_intensity["hemisphere"]
+
+    df_subject_intensity.to_csv(os.path.join(path_CSV_files,f"subject_uptake_{atlas}.csv"))
+
+    values_subject_mean_activity_atlas = df_subject_intensity["mean_PET"]
+    n_label_subject_mean_activity_atlas = df_subject_intensity["n_label"]
+
+    if atlas == "DKT":
+        name_structures = df_subject_intensity["structure"]
+    else:
+        name_structures = df_subject_intensity["structure"] + '-' + df_subject_intensity["hemisphere"]
 
 
     # Extract Cerebellum values
-    cerebellum_name_Hammers = "cerebellum"
+    if atlas == "DKT":
+        cerebellum_name = "Cerebellum-Cortex"
+    elif atlas == "CerebrA":
+        cerebellum_name = "Cerebellum-Gray-Matter"
+    else:
+        cerebellum_name = "cerebellum"
 
+    
     # Extract cerebellum values
-    cerebellum_R_subject = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name_Hammers)
-                                                   & (df_subject_intensity['hemisphere'] == 'R')]['mean_PET']).iloc[0])
-    cerebellum_L_subject = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name_Hammers)
-                                                   & (df_subject_intensity['hemisphere'] == 'L')]['mean_PET']).iloc[0])
-    cerebellum_subject = (cerebellum_R_subject + cerebellum_L_subject) / 2
+    if atlas == "DKT":
+        cerebellum_subject = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name)]
+        ['mean_PET']).iloc[0])
+    else:
+        cerebellum_R_subject = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name)
+                                                               & (df_subject_intensity['hemisphere'] == 'R')][
+            'mean_PET']).iloc[0])
+
+        cerebellum_L_subject = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name)
+                                                               & (df_subject_intensity['hemisphere'] == 'L')][
+            'mean_PET']).iloc[0])
+        cerebellum_subject = (cerebellum_R_subject + cerebellum_L_subject) / 2
 
 
     norm_subject_image_cerebellum = norm.intensity_normalization(image_subject_PET, mode="scalar",
@@ -652,16 +586,16 @@ if __name__ == '__main__':
 
 
     # Quantification Normalization Cerebellum
-    df_subject_intensity_norm_cerebellum_Hammers, image_subject_intensity_norm_cerebellum = quant.PET_FDG_quantification(
-        norm_subject_image_cerebellum, image_Hammers,
-        df_labels_Hammers,
-        second_segmentation=image_aseg_segmentation,
-        atlas="Hammers")
+    df_subject_intensity_norm_cerebellum_atlas, image_subject_intensity_norm_cerebellum = quant.PET_FDG_quantification(
+        norm_subject_image_cerebellum, image_atlas,
+        df_labels_atlas,
+        atlas=atlas)
 
-    values_subject_normalization_cerebellum_hammers = df_subject_intensity_norm_cerebellum_Hammers["mean_PET"]
+    values_subject_normalization_cerebellum_atlas = df_subject_intensity_norm_cerebellum_atlas["mean_PET"]
 
     output_normalization_cerebellum = os.path.join(path_normalization_images,
-                                                   'intensity_normalization_cerebellum.nii.gz')
+                                                   f'intensity_normalization_cerebellum_{atlas}.nii.gz')
+
     sitk.WriteImage(norm_subject_image_cerebellum, output_normalization_cerebellum)
 
     ### Normalized to mean value
@@ -671,79 +605,82 @@ if __name__ == '__main__':
     sitk.WriteImage(norm_subject_image_mean, output_normalization_mean)
 
     # Quantification Normalization mean Value
-    df_subject_intensity_norm_mean_Hammers, image_subject_intensity_norm_mean = quant.PET_FDG_quantification(
-        norm_subject_image_mean, image_Hammers,
-        df_labels_Hammers,
-        second_segmentation=image_aseg_segmentation,
-        atlas="Hammers")
+    df_subject_intensity_norm_mean_atlas, image_subject_intensity_norm_mean = quant.PET_FDG_quantification(
+        norm_subject_image_mean, image_atlas,
+        df_labels_atlas,
+        atlas=atlas)
 
-    values_subject_normalization_mean = df_subject_intensity_norm_mean_Hammers["mean_PET"]
+    values_subject_normalization_mean = df_subject_intensity_norm_mean_atlas["mean_PET"]
 
     # Subject Intensity Normalization CSV
-    output_subject_csv_hammers = os.path.join(path_CSV_files, "subject_normalization_values_hammers.csv")
+    output_subject_csv_atlas = os.path.join(path_CSV_files, f"subject_normalization_values_{atlas}.csv")
 
 
-    df_normalization_subject = pd.DataFrame({'Structure': name_structures_Hammers,
-                                             "n_label": n_label_subject_mean_activity_Hammers,
-                                     'Regional uptake mean values': values_subject_mean_activity_Hammers,
+    df_normalization_subject = pd.DataFrame({'Structure': name_structures,
+                                             "n_label": n_label_subject_mean_activity_atlas,
+                                     'Regional uptake mean values': values_subject_mean_activity_atlas,
                                      'Normalization to total brain mean value': values_subject_normalization_mean,
-                                     'Normalization to cerebellum uptake values': values_subject_normalization_cerebellum_hammers,
+                                     'Normalization to cerebellum uptake values': values_subject_normalization_cerebellum_atlas,
                                              })
-    df_normalization_subject.to_csv(output_subject_csv_hammers)
+    df_normalization_subject.to_csv(output_subject_csv_atlas)
 
     # Quantification FDG-PET in ATLAS MNI152
     MNI_152_PET_image = sitk.ReadImage(path_MNI_152_PET)
     df_MNI152_intensity, image_MNI152_intensity = quant.PET_FDG_quantification(MNI_152_PET_image,
-                                                                               image_Hammers,
-                                                                               df_labels_Hammers,
-                                                                               atlas="Hammers")
-    df_MNI152_intensity.to_csv(os.path.join(path_CSV_files, "MNI152_intensity.csv"))
+                                                                               image_atlas,
+                                                                               df_labels_atlas,
+                                                                               atlas=atlas)
+    df_MNI152_intensity.to_csv(os.path.join(path_CSV_files, f"MNI152_intensity_{atlas}.csv"))
 
-    values_MNI152_mean_activity_Hammers = df_MNI152_intensity["mean_PET"]
+    values_MNI152_mean_activity_atlas = df_MNI152_intensity["mean_PET"]
 
 
     # MNI152 Normalization to cerebellum
     # Extract cerebellum values
-    cerebellum_R_MNI152 = float((df_MNI152_intensity.loc[(df_MNI152_intensity['structure'] == cerebellum_name_Hammers)
-                                                   & (df_MNI152_intensity['hemisphere'] == 'R')]['mean_PET']).iloc[0])
-    cerebellum_L_MNI152 = float((df_MNI152_intensity.loc[(df_MNI152_intensity['structure'] == cerebellum_name_Hammers)
-                                                   & (df_MNI152_intensity['hemisphere'] == 'L')]['mean_PET']).iloc[0])
-    cerebellum_MNI152 = (cerebellum_R_MNI152 + cerebellum_L_MNI152) / 2
+    if atlas == "DKT":
+        cerebellum_MNI152 = float((df_MNI152_intensity.loc[(df_MNI152_intensity['structure'] == cerebellum_name)
+                                                  ]['mean_PET']).iloc[0])
+    else:
+        cerebellum_R_MNI152 = float((df_MNI152_intensity.loc[(df_MNI152_intensity['structure'] == cerebellum_name)
+                                                       & (df_MNI152_intensity['hemisphere'] == 'R')]['mean_PET']).iloc[0])
+        cerebellum_L_MNI152 = float((df_MNI152_intensity.loc[(df_MNI152_intensity['structure'] == cerebellum_name)
+                                                       & (df_MNI152_intensity['hemisphere'] == 'L')]['mean_PET']).iloc[0])
+        cerebellum_MNI152 = (cerebellum_R_MNI152 + cerebellum_L_MNI152) / 2
 
     norm_MNI152_image_cerebellum = norm.intensity_normalization(MNI_152_PET_image, mode="scalar",
                                                          scalar=cerebellum_MNI152)
 
     # Quantification Normalization Cerebellum in ATLAS MNI152
-    df_MNI152_intensity_norm_cerebellum_Hammers, image_MNI152_intensity_norm_cerebellum = quant.PET_FDG_quantification(
-        norm_MNI152_image_cerebellum, image_Hammers,
-        df_labels_Hammers,
-        second_segmentation=None,
-        atlas="Hammers")
+    df_MNI152_intensity_norm_cerebellum_atlas, image_MNI152_intensity_norm_cerebellum = quant.PET_FDG_quantification(
+        norm_MNI152_image_cerebellum, image_atlas,
+        df_labels_atlas,
+        atlas=atlas)
 
-    values_MNI152_normalization_cerebellum_hammers = df_MNI152_intensity_norm_cerebellum_Hammers["mean_PET"]
+    values_MNI152_normalization_cerebellum_atlas = df_MNI152_intensity_norm_cerebellum_atlas["mean_PET"]
 
     ### Normalized to mean value
     norm_MNI152_image_mean = norm.intensity_normalization(MNI_152_PET_image)
 
     # Quantification Normalization mean Value
-    df_MNI152_intensity_norm_mean_Hammers, image_MNI152_intensity_norm_mean = quant.PET_FDG_quantification(
-        norm_MNI152_image_mean, image_Hammers,
-        df_labels_Hammers,
-        second_segmentation=None,
-        atlas="Hammers")
+    df_MNI152_intensity_norm_mean_atlas, image_MNI152_intensity_norm_mean = quant.PET_FDG_quantification(
+        norm_MNI152_image_mean, image_atlas,
+        df_labels_atlas,
+        atlas=atlas)
 
-    values_MNI152_normalization_mean = df_MNI152_intensity_norm_mean_Hammers["mean_PET"]
+    values_MNI152_normalization_mean = df_MNI152_intensity_norm_mean_atlas["mean_PET"]
 
     # MNI152 Intensity Normalization CSV
-    output_MNI152_csv_hammers = os.path.join(path_CSV_files, "MNI152_normalization_values_hammers.csv")
+    output_MNI152_csv_name_atlas = os.path.join(path_CSV_files, f"MNI152_normalization_values_{atlas}.csv")
 
-    df_normalization_MNI152 = pd.DataFrame({'Structure': name_structures_Hammers,
-                                            "n_label":n_label_subject_mean_activity_Hammers,
-                                     'Regional uptake mean values': values_MNI152_mean_activity_Hammers,
+
+    df_normalization_MNI152 = pd.DataFrame({'Structure': name_structures,
+                                            "n_label":n_label_subject_mean_activity_atlas,
+                                     'Regional uptake mean values': values_MNI152_mean_activity_atlas,
                                      'Normalization to total brain mean value': values_MNI152_normalization_mean,
-                                     'Normalization to cerebellum uptake values': values_MNI152_normalization_cerebellum_hammers,
+                                     'Normalization to cerebellum uptake values': values_MNI152_normalization_cerebellum_atlas,
                                              })
-    df_normalization_MNI152.to_csv(output_MNI152_csv_hammers)
+
+    df_normalization_MNI152.to_csv(output_MNI152_csv_name_atlas)
 
     # Generate Synthetic image
     path_synthetic_images = os.path.join(output_path,"Synthetic_Image")
@@ -758,15 +695,15 @@ if __name__ == '__main__':
     # Compare subject with Atlas MNI152 dataset
     image_diff_cerebellum, df_diff_cerebellum = quant.image_change(df_normalization_subject,
                                                                    df_normalization_MNI152,
-                                                                   image_Hammers,
+                                                                   image_atlas,
                                                                    mode="cerebellum")
 
     image_diff_mean, df_diff_mean = quant.image_change(df_normalization_subject,
                                                                    df_normalization_MNI152,
-                                                                   image_Hammers,
+                                                                   image_atlas,
                                                                    mode="mean")
     # Images
-    path_synthetic_image_norm_cerebellum = os.path.join(path_synthetic_images, "synthetic_cerebellum_image_changes.nii.gz")
+    path_synthetic_image_norm_cerebellum = os.path.join(path_synthetic_images, f"synthetic_cerebellum_image_changes_{atlas}.nii.gz")
     path_synthetic_image_norm_mean = os.path.join(path_synthetic_images, "synthetic_mean_image_changes.nii.gz")
 
     sitk.WriteImage(image_diff_cerebellum, path_synthetic_image_norm_cerebellum)
@@ -775,7 +712,7 @@ if __name__ == '__main__':
     # CSV
     change_values_normalized_cerebellum = df_diff_cerebellum["change"]
     change_values_normalized_mean = df_diff_mean["change"]
-    df_changes = pd.DataFrame({'Structure': name_structures_Hammers,
+    df_changes = pd.DataFrame({'Structure': name_structures,
                                             'Change between images normalized to cerebellum': change_values_normalized_cerebellum,
                                             'Change between images normalized to mean uptake values': change_values_normalized_mean,
                                             })
@@ -814,14 +751,14 @@ if __name__ == '__main__':
             registred_PET_image,
             aparc_dkt_image,
             df_labels_FS,
-            atlas="DKT")
+            atlas="FS")
 
         # Destrieux
         df_subject_intensity_freesurfer_destrieux, image_subject_intensity_freesurfer_destrieux = quant.PET_FDG_quantification(
             registred_PET_image,
             aparc_destrieux_image,
             df_labels_FS,
-            atlas="DKT")
+            atlas="FS")
 
         # Write synthetic images
         sitk.WriteImage(image_subject_intensity_freesurfer_dkt, output_synthetic_image_DKT)
@@ -869,13 +806,13 @@ if __name__ == '__main__':
             norm_image_freesurfer_cerebellum_dkt,
             aparc_dkt_image,
             df_labels_FS,
-            atlas="DKT")
+            atlas="FS")
 
         df_subject_intensity_freesurfer_cerebellum_destrieux, image_subject_intensity_freesurfer_cerebellum_destrieux = quant.PET_FDG_quantification(
             norm_image_freesurfer_cerebellum_dkt,
             aparc_destrieux_image,
             df_labels_FS,
-            atlas="DKT")
+            atlas="FS")
 
         # Mean Regional PET uptake values normalized to cerebellum
         values_normalization_cerebellum_dkt = df_subject_intensity_freesurfer_cerebellum_dkt["mean_PET"]
@@ -894,13 +831,13 @@ if __name__ == '__main__':
             norm_image_mean_freesurfer,
             aparc_dkt_image,
             df_labels_FS,
-            atlas="DKT")
+            atlas="FS")
 
         df_subject_intensity_freesurfer_mean_destrieux, image_subject_intensity_freesurfer_mean_destrieux = quant.PET_FDG_quantification(
             norm_image_mean_freesurfer,
             aparc_destrieux_image,
             df_labels_FS,
-            atlas="DKT")
+            atlas="FS")
 
         values_normalization_mean_dkt = df_subject_intensity_freesurfer_mean_dkt["mean_PET"]
         values_normalization_mean_destrieux = df_subject_intensity_freesurfer_mean_destrieux["mean_PET"]
