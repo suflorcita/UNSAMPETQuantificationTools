@@ -565,7 +565,7 @@ if __name__ == '__main__':
     else:
         cerebellum_name = "cerebellum"
 
-    
+
     # Extract cerebellum values
     if atlas == "DKT":
         cerebellum_subject = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name)]
