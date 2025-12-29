@@ -59,6 +59,17 @@ if __name__ == '__main__':
     # By default, args.flirt will be True unless --no-flirt is specified
     parser.set_defaults(freesurfer=True)
 
+    # Add the --no-smoothed argument
+    parser.add_argument(
+        '--no-smoothed',
+        action='store_false',
+        dest='smoothed',
+        help='Disable the use of smoothed PET images. Use this flag to process raw PET instead.'
+    )
+
+    # By default, smoothed=True unless --no-smoothed is specified
+    parser.set_defaults(smoothed=True)
+
     # Parse the arguments
     args = parser.parse_args()
 
@@ -109,6 +120,8 @@ if __name__ == '__main__':
 
     path_MNI_152_T1 = os.path.join(script_dir, 'data', 'atlas', 'MNI152_T1_1mm.nii.gz')
     path_MNI_152_T1_brain = os.path.join(script_dir, 'data', 'atlas', 'MNI152_T1_1mm_brain.nii.gz')
+    path_MNI_152_T1_gm_mask = os.path.join(script_dir, 'data', 'atlas', 'mni_icbm152_gm_mask.nii.gz')
+
     path_MNI_152_PET = os.path.join(script_dir, 'data', 'atlas', "MNI152_PET_1mm.nii")
     path_Hammers = os.path.join(script_dir, 'data', 'atlas', "Hammers_mith-n30r95-MaxProbMap-gm-MNI152-SPM12.nii.gz")
     path_DKT = os.path.join(script_dir, 'data', 'atlas', "Desikan_Killiany_MNI_SPM12.nii.gz")
@@ -119,6 +132,8 @@ if __name__ == '__main__':
         path_atlas = path_DKT
     elif atlas == "CerebrA":
         path_atlas = path_CerebrA
+    elif atlas == "GM":
+        path_atlas = path_MNI_152_T1_gm_mask
     else:
         path_atlas = path_Hammers
 
@@ -127,11 +142,14 @@ if __name__ == '__main__':
     path_labels_DKT_csv = os.path.join(script_dir,  'data', 'labels', "labels_DKT.csv")
     path_labels_Hammers_csv = os.path.join(script_dir, 'data', 'labels', "labels_Hammers.csv")
     path_labels_CerebrA_csv = os.path.join(script_dir, 'data', 'labels', "labels_CerebrA.csv")
+    path_labels_gm_csv = os.path.join(script_dir, 'data', 'labels', "labels_gm_mask.csv")
 
     if path_atlas == path_DKT:
         path_labels = path_labels_DKT_csv
     elif path_atlas == path_CerebrA:
         path_labels = path_labels_CerebrA_csv
+    elif path_atlas == path_MNI_152_T1_gm_mask:
+        path_labels = path_labels_gm_csv
     else:
         path_labels = path_labels_Hammers_csv
 
@@ -229,6 +247,7 @@ if __name__ == '__main__':
         )
 
         # --- Ensure transforms exist even if pipeline skipped them ---
+
         transform_files = regtools.ensure_transform_files(output_path, transform_files)
 
         # --- Normalize each frame ---
@@ -373,72 +392,77 @@ if __name__ == '__main__':
                 # then write the image.
                 path_PET_frame_registered_to_MRI = os.path.join(path_frame, f"PET_frame_to_MRI_{i}.nii.gz")
 
-                # TO DO: Read Transform and apply
+
                 PET_frame_registered_to_MRI = reg.read_and_apply_tx(path_transform, registered_frame, ref_image=PET_registered_to_MRI)
                 sitk.WriteImage(PET_frame_registered_to_MRI, path_PET_frame_registered_to_MRI)
 
-            path_PET_final = path_PET_registered_to_MRI  # Set the reference PET as the PET image registered to MRI
+        path_PET_final = path_PET_registered_to_MRI  # Set the reference PET as the PET image registered to MRI
 
-
-        print("Registration: ok")
         # Normalization:
+        #
+        # # Flirt
+        # # Apply FLIRT to T1
+        # if args.flirt:
+        #     path_flirt_images = os.path.join(output_path, "FLIRT")
+        #     if not os.path.exists(path_flirt_images):
+        #         os.mkdir(path_flirt_images)
+        #
+        #     path_FLIRT_image = os.path.join(path_flirt_images, "T1_Norm_MNI_152_FLIRT.nii.gz")
+        #     path_FLIRT_tx = os.path.join(path_flirt_images, "T1_Norm_MNI_152_FLIRT.mat")
+        #
+        #     flirt_command = f"flirt -in {path_T1} -ref {path_MNI_152_T1} -out {path_FLIRT_image} -omat {path_FLIRT_tx} -interp trilinear -dof 12"
+        #     subprocess.run([flirt_command], shell=True)
+        #
+        #
+        #     # Apply FLIRT transform to T1 only brain
+        #     path_flirt_MRI = os.path.join(path_flirt_images, "T1_brain_MNI_152_FLIRT.nii.gz")
+        #     flirt_apply_transform_t1_brain_command = f"flirt -in {path_T1_brain} -applyxfm -init {path_FLIRT_tx} " \
+        #                                         f"-out {path_flirt_MRI} " \
+        #                                         f"-paddingsize 0.0 -interp trilinear -ref {path_MNI_152_T1_brain}"
+        #
+        #
+        #     path_normalized_MRI_image = path_flirt_MRI
+        #     subprocess.run([flirt_apply_transform_t1_brain_command], shell=True)
+        #     print(flirt_command)
+        #
+        #
+        #     # Apply FLIRT transform to PET Image
+        #     path_FLIRT_PET = os.path.join(path_flirt_images, "PET_Norm_MNI_152_FLIRT.nii.gz")
+        #     flirt_apply_transform_PET_command = f"flirt -in {path_PET_registered_to_MRI} -applyxfm -init {path_FLIRT_tx} " \
+        #                                         f"-out {path_FLIRT_PET} " \
+        #                                         f"-paddingsize 0.0 -interp trilinear -ref {path_MNI_152_T1_brain}"
+        #     subprocess.run([flirt_apply_transform_PET_command], shell=True)
+        #
+        #     path_PET_final = path_FLIRT_PET
+        #     path_normalized_PET_image = path_FLIRT_PET
+        #     # If exists, apply FLIRT transform to segmentation image
+        #     if aseg:
+        #         path_FLIRT_segmentation = path_flirt_images + "/aseg_Norm_MNI_152_FLIRT.nii.gz"
+        #         flirt_apply_transform_aseg_command = f"flirt -in {path_segmentation} -applyxfm -init {path_FLIRT_tx} " \
+        #                                         f"-out {path_FLIRT_segmentation} " \
+        #                                         f"-paddingsize 0.0 -interp nearestneighbour -ref {path_MNI_152_T1_brain}"
+        #         path_normalized_aseg_segmentation = path_FLIRT_segmentation
+        #         subprocess.run([flirt_apply_transform_aseg_command], shell=True)
+        # else:
+        #     path_flirt_MRI = None
+        #     path_FLIRT_PET = None
+        #     path_FLIRT_segmentation = None
 
-        # Flirt
-        # Apply FLIRT to T1
-        if args.flirt:
-            path_flirt_images = os.path.join(output_path, "FLIRT")
-            if not os.path.exists(path_flirt_images):
-                os.mkdir(path_flirt_images)
+        # --- FLIRT removed ---
+        path_FLIRT_MRI = None
+        path_FLIRT_PET = None
+        path_FLIRT_segmentation = None
+        # ---------------------
 
-            path_FLIRT_image = os.path.join(path_flirt_images, "T1_Norm_MNI_152_FLIRT.nii.gz")
-            path_FLIRT_tx = os.path.join(path_flirt_images, "T1_Norm_MNI_152_FLIRT.mat")
-
-            flirt_command = f"flirt -in {path_T1} -ref {path_MNI_152_T1} -out {path_FLIRT_image} -omat {path_FLIRT_tx} -interp trilinear -dof 12"
-            subprocess.run([flirt_command], shell=True)
-
-
-            # Apply FLIRT transform to T1 only brain
-            path_flirt_MRI = os.path.join(path_flirt_images, "T1_brain_MNI_152_FLIRT.nii.gz")
-            flirt_apply_transform_t1_brain_command = f"flirt -in {path_T1_brain} -applyxfm -init {path_FLIRT_tx} " \
-                                                f"-out {path_flirt_MRI} " \
-                                                f"-paddingsize 0.0 -interp trilinear -ref {path_MNI_152_T1_brain}"
-
-
-            path_normalized_MRI_image = path_flirt_MRI
-            subprocess.run([flirt_apply_transform_t1_brain_command], shell=True)
-            print(flirt_command)
-
-
-            # Apply FLIRT transform to PET Image
-            path_FLIRT_PET = os.path.join(path_flirt_images, "PET_Norm_MNI_152_FLIRT.nii.gz")
-            flirt_apply_transform_PET_command = f"flirt -in {path_PET_registered_to_MRI} -applyxfm -init {path_FLIRT_tx} " \
-                                                f"-out {path_FLIRT_PET} " \
-                                                f"-paddingsize 0.0 -interp trilinear -ref {path_MNI_152_T1_brain}"
-            subprocess.run([flirt_apply_transform_PET_command], shell=True)
-
-            path_PET_final = path_FLIRT_PET
-            path_normalized_PET_image = path_FLIRT_PET
-            # If exists, apply FLIRT transform to segmentation image
-            if aseg:
-                path_FLIRT_segmentation = path_flirt_images + "/aseg_Norm_MNI_152_FLIRT.nii.gz"
-                flirt_apply_transform_aseg_command = f"flirt -in {path_segmentation} -applyxfm -init {path_FLIRT_tx} " \
-                                                f"-out {path_FLIRT_segmentation} " \
-                                                f"-paddingsize 0.0 -interp nearestneighbour -ref {path_MNI_152_T1_brain}"
-                path_normalized_aseg_segmentation = path_FLIRT_segmentation
-                subprocess.run([flirt_apply_transform_aseg_command], shell=True)
-        else:
-            path_flirt_MRI = None
-            path_FLIRT_PET = None
-            path_FLIRT_segmentation = None
 
         # ANT
 
         if args.ants:
             # T1
-            if path_flirt_MRI == None:
+            if path_FLIRT_MRI == None:
                 path_ANT_input_t1 = path_T1_brain
             else:
-                path_ANT_input_t1 = path_flirt_MRI
+                path_ANT_input_t1 = path_FLIRT_MRI
 
             # PET
             if path_FLIRT_PET == None:
@@ -556,47 +580,47 @@ if __name__ == '__main__':
     else:
         name_structures = df_subject_intensity["structure"] + '-' + df_subject_intensity["hemisphere"]
 
-
-    # Extract Cerebellum values
-    if atlas == "DKT":
-        cerebellum_name = "Cerebellum-Cortex"
-    elif atlas == "CerebrA":
-        cerebellum_name = "Cerebellum-Gray-Matter"
-    else:
-        cerebellum_name = "cerebellum"
-
-
-    # Extract cerebellum values
-    if atlas == "DKT":
-        cerebellum_subject = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name)]
-        ['mean_PET']).iloc[0])
-    else:
-        cerebellum_R_subject = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name)
-                                                               & (df_subject_intensity['hemisphere'] == 'R')][
-            'mean_PET']).iloc[0])
-
-        cerebellum_L_subject = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name)
-                                                               & (df_subject_intensity['hemisphere'] == 'L')][
-            'mean_PET']).iloc[0])
-        cerebellum_subject = (cerebellum_R_subject + cerebellum_L_subject) / 2
+    if not atlas == "GM":
+        # Extract Cerebellum values
+        if atlas == "DKT":
+            cerebellum_name = "Cerebellum-Cortex"
+        elif atlas == "CerebrA":
+            cerebellum_name = "Cerebellum-Gray-Matter"
+        else:
+            cerebellum_name = "cerebellum"
 
 
-    norm_subject_image_cerebellum = norm.intensity_normalization(image_subject_PET, mode="scalar",
-                                                                 scalar=cerebellum_subject)
+        # Extract cerebellum values
+        if atlas == "DKT":
+            cerebellum_subject = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name)]
+            ['mean_PET']).iloc[0])
+        else:
+            cerebellum_R_subject = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name)
+                                                                   & (df_subject_intensity['hemisphere'] == 'R')][
+                'mean_PET']).iloc[0])
+
+            cerebellum_L_subject = float((df_subject_intensity.loc[(df_subject_intensity['structure'] == cerebellum_name)
+                                                                   & (df_subject_intensity['hemisphere'] == 'L')][
+                'mean_PET']).iloc[0])
+            cerebellum_subject = (cerebellum_R_subject + cerebellum_L_subject) / 2
 
 
-    # Quantification Normalization Cerebellum
-    df_subject_intensity_norm_cerebellum_atlas, image_subject_intensity_norm_cerebellum = quant.PET_FDG_quantification(
-        norm_subject_image_cerebellum, image_atlas,
-        df_labels_atlas,
-        atlas=atlas)
+        norm_subject_image_cerebellum = norm.intensity_normalization(image_subject_PET, mode="scalar",
+                                                                     scalar=cerebellum_subject)
 
-    values_subject_normalization_cerebellum_atlas = df_subject_intensity_norm_cerebellum_atlas["mean_PET"]
 
-    output_normalization_cerebellum = os.path.join(path_normalization_images,
-                                                   f'intensity_normalization_cerebellum_{atlas}.nii.gz')
+        # Quantification Normalization Cerebellum
+        df_subject_intensity_norm_cerebellum_atlas, image_subject_intensity_norm_cerebellum = quant.PET_FDG_quantification(
+            norm_subject_image_cerebellum, image_atlas,
+            df_labels_atlas,
+            atlas=atlas)
 
-    sitk.WriteImage(norm_subject_image_cerebellum, output_normalization_cerebellum)
+        values_subject_normalization_cerebellum_atlas = df_subject_intensity_norm_cerebellum_atlas["mean_PET"]
+
+        output_normalization_cerebellum = os.path.join(path_normalization_images,
+                                                       f'intensity_normalization_cerebellum_{atlas}.nii.gz')
+
+        sitk.WriteImage(norm_subject_image_cerebellum, output_normalization_cerebellum)
 
     ### Normalized to mean value
     norm_subject_image_mean = norm.intensity_normalization(image_subject_PET)
@@ -615,13 +639,25 @@ if __name__ == '__main__':
     # Subject Intensity Normalization CSV
     output_subject_csv_atlas = os.path.join(path_CSV_files, f"subject_normalization_values_{atlas}.csv")
 
+    # --- Create the DataFrame depending on the atlas type ---
+    if atlas == "GM":
+        # If the atlas is GM, exclude normalization to cerebellum uptake values
+        df_normalization_subject = pd.DataFrame({
+            'Structure': name_structures,
+            'n_label': n_label_subject_mean_activity_atlas,
+            'Regional uptake mean values': values_subject_mean_activity_atlas,
+            'Normalization to total brain mean value': values_subject_normalization_mean,
+        })
+    else:
+        # For all other atlases, include both normalizations
+        df_normalization_subject = pd.DataFrame({
+            'Structure': name_structures,
+            'n_label': n_label_subject_mean_activity_atlas,
+            'Regional uptake mean values': values_subject_mean_activity_atlas,
+            'Normalization to total brain mean value': values_subject_normalization_mean,
+            'Normalization to cerebellum uptake values': values_subject_normalization_cerebellum_atlas,
+        })
 
-    df_normalization_subject = pd.DataFrame({'Structure': name_structures,
-                                             "n_label": n_label_subject_mean_activity_atlas,
-                                     'Regional uptake mean values': values_subject_mean_activity_atlas,
-                                     'Normalization to total brain mean value': values_subject_normalization_mean,
-                                     'Normalization to cerebellum uptake values': values_subject_normalization_cerebellum_atlas,
-                                             })
     df_normalization_subject.to_csv(output_subject_csv_atlas)
 
     # Quantification FDG-PET in ATLAS MNI152
@@ -636,27 +672,28 @@ if __name__ == '__main__':
 
 
     # MNI152 Normalization to cerebellum
-    # Extract cerebellum values
-    if atlas == "DKT":
-        cerebellum_MNI152 = float((df_MNI152_intensity.loc[(df_MNI152_intensity['structure'] == cerebellum_name)
-                                                  ]['mean_PET']).iloc[0])
-    else:
-        cerebellum_R_MNI152 = float((df_MNI152_intensity.loc[(df_MNI152_intensity['structure'] == cerebellum_name)
-                                                       & (df_MNI152_intensity['hemisphere'] == 'R')]['mean_PET']).iloc[0])
-        cerebellum_L_MNI152 = float((df_MNI152_intensity.loc[(df_MNI152_intensity['structure'] == cerebellum_name)
-                                                       & (df_MNI152_intensity['hemisphere'] == 'L')]['mean_PET']).iloc[0])
-        cerebellum_MNI152 = (cerebellum_R_MNI152 + cerebellum_L_MNI152) / 2
+    if not atlas == "GM":
+        # Extract cerebellum values
+        if atlas == "DKT":
+            cerebellum_MNI152 = float((df_MNI152_intensity.loc[(df_MNI152_intensity['structure'] == cerebellum_name)
+                                                      ]['mean_PET']).iloc[0])
+        else:
+            cerebellum_R_MNI152 = float((df_MNI152_intensity.loc[(df_MNI152_intensity['structure'] == cerebellum_name)
+                                                           & (df_MNI152_intensity['hemisphere'] == 'R')]['mean_PET']).iloc[0])
+            cerebellum_L_MNI152 = float((df_MNI152_intensity.loc[(df_MNI152_intensity['structure'] == cerebellum_name)
+                                                           & (df_MNI152_intensity['hemisphere'] == 'L')]['mean_PET']).iloc[0])
+            cerebellum_MNI152 = (cerebellum_R_MNI152 + cerebellum_L_MNI152) / 2
 
-    norm_MNI152_image_cerebellum = norm.intensity_normalization(MNI_152_PET_image, mode="scalar",
-                                                         scalar=cerebellum_MNI152)
+        norm_MNI152_image_cerebellum = norm.intensity_normalization(MNI_152_PET_image, mode="scalar",
+                                                             scalar=cerebellum_MNI152)
 
-    # Quantification Normalization Cerebellum in ATLAS MNI152
-    df_MNI152_intensity_norm_cerebellum_atlas, image_MNI152_intensity_norm_cerebellum = quant.PET_FDG_quantification(
-        norm_MNI152_image_cerebellum, image_atlas,
-        df_labels_atlas,
-        atlas=atlas)
+        # Quantification Normalization Cerebellum in ATLAS MNI152
+        df_MNI152_intensity_norm_cerebellum_atlas, image_MNI152_intensity_norm_cerebellum = quant.PET_FDG_quantification(
+            norm_MNI152_image_cerebellum, image_atlas,
+            df_labels_atlas,
+            atlas=atlas)
 
-    values_MNI152_normalization_cerebellum_atlas = df_MNI152_intensity_norm_cerebellum_atlas["mean_PET"]
+        values_MNI152_normalization_cerebellum_atlas = df_MNI152_intensity_norm_cerebellum_atlas["mean_PET"]
 
     ### Normalized to mean value
     norm_MNI152_image_mean = norm.intensity_normalization(MNI_152_PET_image)
@@ -672,13 +709,27 @@ if __name__ == '__main__':
     # MNI152 Intensity Normalization CSV
     output_MNI152_csv_name_atlas = os.path.join(path_CSV_files, f"MNI152_normalization_values_{atlas}.csv")
 
+    # --- Create the DataFrame depending on the atlas type ---
+    if atlas == "GM":
+        # If the atlas is GM, skip normalization to cerebellum uptake values
+        df_normalization_MNI152 = pd.DataFrame({
+            'Structure': name_structures,
+            'n_label': n_label_subject_mean_activity_atlas,
+            'Regional uptake mean values': values_MNI152_mean_activity_atlas,
+            'Normalization to total brain mean value': values_MNI152_normalization_mean,
+        })
+    else:
+        # For all other atlases, include both normalizations
+        df_normalization_MNI152 = pd.DataFrame({
+            'Structure': name_structures,
+            'n_label': n_label_subject_mean_activity_atlas,
+            'Regional uptake mean values': values_MNI152_mean_activity_atlas,
+            'Normalization to total brain mean value': values_MNI152_normalization_mean,
+            'Normalization to cerebellum uptake values': values_MNI152_normalization_cerebellum_atlas,
+        })
 
-    df_normalization_MNI152 = pd.DataFrame({'Structure': name_structures,
-                                            "n_label":n_label_subject_mean_activity_atlas,
-                                     'Regional uptake mean values': values_MNI152_mean_activity_atlas,
-                                     'Normalization to total brain mean value': values_MNI152_normalization_mean,
-                                     'Normalization to cerebellum uptake values': values_MNI152_normalization_cerebellum_atlas,
-                                             })
+    # --- Save the resulting CSV file ---
+
 
     df_normalization_MNI152.to_csv(output_MNI152_csv_name_atlas)
 
@@ -693,31 +744,40 @@ if __name__ == '__main__':
 
 
     # Compare subject with Atlas MNI152 dataset
-    image_diff_cerebellum, df_diff_cerebellum = quant.image_change(df_normalization_subject,
-                                                                   df_normalization_MNI152,
-                                                                   image_atlas,
-                                                                   mode="cerebellum")
+    if not atlas == "GM":
+        image_diff_cerebellum, df_diff_cerebellum = quant.image_change(df_normalization_subject,
+                                                                       df_normalization_MNI152,
+                                                                       image_atlas,
+                                                                       mode="cerebellum")
+        path_synthetic_image_norm_cerebellum = os.path.join(path_synthetic_images, f"synthetic_cerebellum_image_changes_{atlas}.nii.gz")
+        sitk.WriteImage(image_diff_cerebellum, path_synthetic_image_norm_cerebellum)
+
 
     image_diff_mean, df_diff_mean = quant.image_change(df_normalization_subject,
                                                                    df_normalization_MNI152,
                                                                    image_atlas,
                                                                    mode="mean")
     # Images
-    path_synthetic_image_norm_cerebellum = os.path.join(path_synthetic_images, f"synthetic_cerebellum_image_changes_{atlas}.nii.gz")
     path_synthetic_image_norm_mean = os.path.join(path_synthetic_images, "synthetic_mean_image_changes.nii.gz")
 
-    sitk.WriteImage(image_diff_cerebellum, path_synthetic_image_norm_cerebellum)
+
     sitk.WriteImage(image_diff_mean, path_synthetic_image_norm_mean)
 
     # CSV
-    change_values_normalized_cerebellum = df_diff_cerebellum["change"]
-    change_values_normalized_mean = df_diff_mean["change"]
-    df_changes = pd.DataFrame({'Structure': name_structures,
-                                            'Change between images normalized to cerebellum': change_values_normalized_cerebellum,
-                                            'Change between images normalized to mean uptake values': change_values_normalized_mean,
-                                            })
-
-    df_changes.to_csv(os.path.join(path_CSV_files, "Intensity_image_changes.csv"))
+    # --- Create the DataFrame depending on the atlas type ---
+    if atlas == "GM":
+        # If the atlas is GM, skip cerebellum normalization
+        df_changes = pd.DataFrame({
+            'Structure': name_structures,
+            'Change between images normalized to mean uptake values': df_diff_mean["change"],
+        })
+    else:
+        # For all other atlases, include both normalizations
+        df_changes = pd.DataFrame({
+            'Structure': name_structures,
+            'Change between images normalized to cerebellum': df_diff_cerebellum["change"],
+            'Change between images normalized to mean uptake values': df_diff_mean["change"],
+        })
 
     if freesurfer:
         output_synthetic_image_Destrieux = os.path.join(path_synthetic_images, "synthetic_image_subject_Destrieux.nii.gz")
@@ -744,7 +804,6 @@ if __name__ == '__main__':
 
         registred_PET_image = sitk.ReadImage(path_PET_registered_to_MRI)
 
-        print(path_PET_registered_to_MRI)
 
         # DKT
         df_subject_intensity_freesurfer_dkt, image_subject_intensity_freesurfer_dkt = quant.PET_FDG_quantification(

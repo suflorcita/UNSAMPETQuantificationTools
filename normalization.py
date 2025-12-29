@@ -11,7 +11,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 path_Hammers = os.path.join(script_dir, 'data', 'atlas', "Hammers_mith-n30r95-MaxProbMap-gm-MNI152-SPM12.nii.gz")
 path_MNI_152_T1_brain = os.path.join(script_dir, 'data', 'atlas', 'MNI152_T1_1mm_brain.nii.gz')
 
-labels_Hammers_csv_path =  os.path.join(script_dir, "Labels/labels_Hammers.csv")
+labels_Hammers_csv_path =  os.path.join(script_dir, "data", "atlas", "labels_Hammers.csv")
 df_labels_Hammers = pd.read_csv(labels_Hammers_csv_path)
 
 # Read T1_brain image.

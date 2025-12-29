@@ -17,10 +17,22 @@ def gaussian_smooth(input_image, output_dir, prefix="Image", fwhm=6.0, name=None
     gaussian_filter.SetSigma(sigma)
 
     img = sitk.ReadImage(input_image)
+
+    # --- Extracción de la Información Espacial Original ---
+    original_origin = img.GetOrigin()
+    original_direction = img.GetDirection()
+
     smoothed = gaussian_filter.Execute(img)
+
+    smoothed.SetOrigin(original_origin)
+    smoothed.SetDirection(original_direction)
+
 
     base_name = name if name else prefix
     out_path = os.path.join(output_dir, f"{base_name}.nii.gz")
+
+    smoothed_final = sitk.Cast(smoothed, sitk.sitkFloat32)
+
     sitk.WriteImage(smoothed, out_path)
     return out_path
 
@@ -86,6 +98,10 @@ def apply_ants(input_image, ref_image, tx1, tx2, output_dir, prefix="Image", nam
     return out_path
 
 
+import os
+import glob
+
+
 def ensure_transform_files(output_path, transform_files):
     """
     Ensure transform_files contains FLIRT or ANTs transforms.
@@ -105,6 +121,7 @@ def ensure_transform_files(output_path, transform_files):
             transform_files["ants_tx"] = (tx1, tx2)
 
     return transform_files
+
 
 def ensure_normalized_image(output_path, path_MRI_image=None, freesurfer=False, quantify_using_flirt=False):
     """
@@ -170,93 +187,89 @@ def ensure_normalized_image(output_path, path_MRI_image=None, freesurfer=False, 
 # -------------------
 # PET -> Template pipeline
 # -------------------
-
 def pet_registration_pipeline(path_PET_image, path_PET_template, output_path, args,
                               path_ANT="antsRegistrationSyN.sh", path_ANT_apply="antsApplyTransforms"):
     """
     Run PET -> Template registration using FLIRT and/or ANTs.
-    Saves intermediate and final results with consistent names.
-    If ANTs is requested, it will use FLIRT results if they exist (even if args.flirt=False).
-
-    Returns:
-        path_PET_final (str): Final registered PET image.
-        path_normalized_PET_image (str): Normalized PET (smoothed-to-template).
-        transform_files (dict): Dict with transform files (keys: "flirt_mat" or "ants_tx").
+    Optionally skips Gaussian smoothing if --no-smoothed is used.
+    Ensures transforms are applied only when relevant.
     """
 
-    # 1. Gaussian smoothing
-    path_smoothed_image = gaussian_smooth(
-        input_image=path_PET_image,
-        output_dir=output_path,
-        prefix="Smoothed_PET_image"
-    )
+    # 1. Selección de imagen base
+    if getattr(args, "smoothed", True):
+        path_input_for_registration = gaussian_smooth(
+            input_image=path_PET_image,
+            output_dir=output_path,
+            prefix="Smoothed_PET_image"
+        )
+        input_label = "smoothed"
+    else:
+        path_input_for_registration = path_PET_image
+        input_label = "image"
 
-    path_PET_final = path_smoothed_image
+    path_PET_final = path_input_for_registration
     path_normalized_PET_image = None
-    path_smoothed_PET_to_Template_Flirt = None
-    path_PET_to_Template_Flirt = None
     transform_files = {}
 
-    path_FLIRT_tx = os.path.join(output_path, "PET_smoothed_image_to_template_flirt.mat")
-
-    print(path_smoothed_image)
-    # 2. FLIRT
+    # 2. FLIRT registration
     if args.flirt:
-
-        path_smoothed_PET_to_Template_Flirt, path_FLIRT_tx = run_flirt(
-            input_image=path_smoothed_image,
+        path_PET_to_Template_Flirt, path_FLIRT_tx = run_flirt(
+            input_image=path_input_for_registration,
             ref_image=path_PET_template,
             output_dir=output_path,
-            prefix="PET_smoothed_image_to_template_flirt"
+            prefix=f"PET_{input_label}_to_template_flirt"
         )
 
-        path_PET_to_Template_Flirt = apply_flirt(
-            input_image=path_PET_image,
-            ref_image=path_PET_template,
-            mat_file=path_FLIRT_tx,
-            output_dir=output_path,
-            prefix="PET_image_to_template_flirt"
-        )
+        # Solo aplicar la matriz si hubo smoothing
+        if args.smoothed:
+            path_PET_to_Template_Flirt_applied = apply_flirt(
+                input_image=path_PET_image,
+                ref_image=path_PET_template,
+                mat_file=path_FLIRT_tx,
+                output_dir=output_path,
+                prefix=f"PET_image_to_template_flirt"
+            )
+            path_PET_final = path_PET_to_Template_Flirt_applied
+            path_normalized_PET_image = path_PET_to_Template_Flirt_applied
+        else:
+            # No need to apply transform again if registration used raw directly
+            path_PET_final = path_PET_to_Template_Flirt
+            path_normalized_PET_image = path_PET_to_Template_Flirt
 
-        path_normalized_PET_image = path_PET_to_Template_Flirt
-        path_PET_final = path_PET_to_Template_Flirt
         transform_files["flirt_mat"] = path_FLIRT_tx
 
-    # 3. ANTs
+    # 3. ANTs registration
     if args.ants:
-        # usar FLIRT si ya existe, aunque args.flirt=False
-        if os.path.exists(path_FLIRT_tx):
-            ants_input_smoothed = os.path.join(output_path, "PET_smoothed_image_to_template_flirt.nii.gz")
-            ants_input_raw = path_PET_to_Template_Flirt if path_PET_to_Template_Flirt else \
-                os.path.join(output_path, "PET_image_to_template_flirt_raw.nii.gz")
-        else:
-            ants_input_smoothed = path_smoothed_image
-            ants_input_raw = path_PET_image
+        ants_prefix = f"PET_{input_label}_to_template_ANT"
 
-        ants_prefix = "PET_smoothed_image_to_template_ANT"
         warped, tx1, tx2 = run_ants(
-            input_image=ants_input_smoothed,
+            input_image=path_input_for_registration,
             ref_image=path_PET_template,
             output_dir=output_path,
             prefix=ants_prefix,
             path_ANT=path_ANT
         )
 
-        path_PET_to_Template_ANT = apply_ants(
-            input_image=ants_input_raw,
-            ref_image=path_PET_template,
-            tx1=tx1,
-            tx2=tx2,
-            output_dir=output_path,
-            prefix="PET_image_to_template_ANT",
-            path_ANT_apply=path_ANT_apply
-        )
+        # Si hubo smoothing, aplicar la transformada al raw
+        if args.smoothed:
+            path_PET_to_Template_ANT = apply_ants(
+                input_image=path_PET_image,
+                ref_image=path_PET_template,
+                tx1=tx1,
+                tx2=tx2,
+                output_dir=output_path,
+                prefix="PET_image_to_template_ANT",
+                path_ANT_apply=path_ANT_apply
+            )
+            path_PET_final = path_PET_to_Template_ANT
+        else:
+            path_PET_final = warped
 
-        path_normalized_PET_image = path_PET_to_Template_ANT
-        path_PET_final = path_PET_to_Template_ANT
+        path_normalized_PET_image = path_PET_final
         transform_files["ants_tx"] = (tx1, tx2)
 
     return path_PET_final, path_normalized_PET_image, transform_files
+
 
 
 def normalize_pet_frames_to_template(PET_frames, path_PET_template, transform_files, output_dir):
