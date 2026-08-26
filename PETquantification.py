@@ -230,12 +230,13 @@ def PET_FDG_quantification(brain_image, brain_segmentation,
         array_segmentation2 = sitk.GetArrayFromImage(brain_segmentation2)
 
     for i, label in enumerate(labels):
-
         hemisphere = ''
-
         # match label with name of structure
         label_row = name_labels.loc[name_labels['n_label'] == label]  # find row with label in csv
-        structure_name = str(label_row['structure'].values)[2:-2]  # match with the structure name
+        if label_row.empty:
+            # no matching label in CSV; skip this segmentation label
+            continue
+        structure_name = label_row['structure'].values[0]  # match with the structure name
 
         if atlas == "Hammers":
             # split structure name

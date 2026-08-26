@@ -114,8 +114,6 @@ if __name__ == '__main__':
     if atlas == None:
         atlas = "Hammers"
 
-
-
     # Path ATLAS
 
     path_MNI_152_T1 = os.path.join(script_dir, 'data', 'atlas', 'MNI152_T1_1mm.nii.gz')
@@ -152,7 +150,18 @@ if __name__ == '__main__':
         path_labels = path_labels_gm_csv
     else:
         path_labels = path_labels_Hammers_csv
-
+    # Load labels in dataframe
+    df_labels_FS = pd.read_csv(path_labels_FS_csv)
+    df_labels_atlas = pd.read_csv(path_labels, sep=",",
+        header=0,
+        dtype={"n_label": "int64", "structure": "string"},
+        engine="c",
+        encoding="utf-8",
+        keep_default_na=False,
+        na_filter=False
+    )
+    df_labels_atlas["structure"] = df_labels_atlas["structure"].str.strip()
+    print(df_labels_atlas["structure"])
 
     # Output
     output_path = os.path.join(output_path, subject)
@@ -519,10 +528,6 @@ if __name__ == '__main__':
 
                 subprocess.run([ANT_transform_segmentation_command], shell=True)
 
-
-    # Dataframe of name of labels
-    df_labels_FS = pd.read_csv(path_labels_FS_csv)
-    df_labels_atlas = pd.read_csv(path_labels)
 
     # --- Ensure normalized PET (and MRI if exists) ---
     normalized = regtools.ensure_normalized_image(
